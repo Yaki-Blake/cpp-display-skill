@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!--
+  ============================================================
+  代码逐行演示页 · 模板
+  ------------------------------------------------------------
+  换算法时要动的地方，只有 4 处：
+    1. <title> 和 header 里的标题
+    2. TRACE 块里的 INPUT / CODE / L / run() / brute()
+    3. 数据面板的 HTML 结构（.block 那几段）
+    4. renderArray / renderStack / renderVars 三个渲染函数
+
+  不要动：CSS 变量、控制按钮的 id、播放控制那段 JS。
+  ============================================================
+-->
+<title>单调栈 · 逐行演示</title>
+<style>
+  :root {
+    --bg: #f4f3ef;
+    --card: #ffffff;
+    --line: #e6e4dd;
+    --txt: #2b2a27;
+    --txt2: #78766e;
+    --txt3: #a8a59c;
+    --blue: #2f6fd0;
+    --blue-bg: #eaf1fb;
+    --amber: #c07c14;
+    --amber-bg: #fdf3e0;
+    --green: #17804a;
+    --green-bg: #e8f5ee;
+    --red: #c0392b;
+    --red-bg: #fbecea;
+    --mono: ui-monospace, "Cascadia Code", Consolas, "SF Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--txt);
+    height: 100vh;
+    overflow: hidden;
+    font-size: 13px;
+  }
+  .app { display: flex; flex-direction: column; height: 100vh; }
+
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 18px 10px; flex-wrap: wrap;
+  }
+  .title { font-size: 15px; font-weight: 600; letter-spacing: .2px; }
+  .title small { font-weight: 400; color: var(--txt2); margin-left: 8px; font-size: 12px; }
+  .spacer { flex: 1; }
+
+  .controls { display: flex; align-items: center; gap: 6px; }
+  button {
+    font: inherit; font-size: 12.5px; padding: 6px 13px;
+    border-radius: 8px; border: 1px solid var(--line);
+    background: #fff; color: var(--txt); cursor: pointer;
+    transition: background .12s, border-color .12s, transform .06s;
+  }
+  button:hover { background: #faf9f6; border-color: #d6d3ca; }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary {
+    background: var(--txt); color: #fff; border-color: var(--txt); min-width: 68px;
+  }
+  button.primary:hover { background: #41403b; }
+
+  .speed { display: flex; gap: 2px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 2px; }
+  .speed button { border: none; padding: 4px 9px; background: transparent; border-radius: 6px; font-size: 12px; color: var(--txt2); }
+  .speed button.on { background: var(--amber-bg); color: var(--amber); font-weight: 500; }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 500px) minmax(0, 1fr);
+    gap: 12px; padding: 0 14px 14px;
+    overflow: hidden; min-height: 0; flex: 1;
+  }
+  .panel {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  }
+  .phead {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 14px; border-bottom: 1px solid var(--line);
+    font-size: 12px; color: var(--txt2); flex-shrink: 0;
+  }
+  .phead b { font-weight: 500; color: var(--txt); font-size: 12.5px; }
+
+  /* 左：代码 */
+  .code-scroll { overflow: auto; padding: 6px 0 14px; flex: 1; scroll-behavior: smooth; }
+  .cl {
+    display: flex; font-family: var(--mono); font-size: 12px; line-height: 21px;
+    padding: 0 12px; white-space: pre;
+    border-left: 3px solid transparent; color: #43413b;
+    transition: background .12s;
+  }
+  .cl .ln {
+    width: 22px; flex-shrink: 0; text-align: right; margin-right: 10px;
+    color: #c3c0b7; user-select: none;
+  }
+  .cl.active { background: var(--amber-bg); border-left-color: #dda43a; }
+  .cl.active .ln { color: var(--amber); font-weight: 600; }
+  .cl.active .cd { color: #6b4a10; }
+
+  /* 右：数据 */
+  .data-scroll { overflow-y: auto; padding: 12px 14px 20px; flex: 1; }
+
+  .note {
+    background: var(--amber-bg); border: 1px solid #f0dcbc; border-radius: 9px;
+    padding: 9px 12px; font-size: 12.5px; line-height: 1.6; color: #6b4a10;
+    min-height: 54px; display: flex; align-items: center; margin-bottom: 12px;
+  }
+  .note .dot { width: 6px; height: 6px; border-radius: 50%; background: #dda43a; margin-right: 9px; flex-shrink: 0; }
+
+  .block { margin-bottom: 14px; }
+  .btitle {
+    font-size: 11.5px; color: var(--txt3); letter-spacing: .4px;
+    margin-bottom: 7px; text-transform: uppercase;
+  }
+
+  .arr-grid { display: grid; gap: 5px; align-items: center; justify-content: start; }
+  .albl { font-family: var(--mono); font-size: 11.5px; color: var(--txt3); padding-right: 8px; }
+  .aidx { text-align: center; font-family: var(--mono); font-size: 11px; color: var(--txt3); padding-bottom: 1px; }
+  .cell, .mini {
+    text-align: center; border-radius: 8px; font-family: var(--mono);
+    border: 1px solid var(--line); background: #fcfbf9; color: var(--txt);
+    transition: all .15s;
+  }
+  .cell { height: 40px; line-height: 38px; font-size: 15px; font-weight: 500; }
+  .mini { height: 26px; line-height: 24px; font-size: 12px; color: var(--txt2); }
+  .cell.in { background: var(--blue-bg); border-color: #b9d0ef; color: #1c4f9e; }
+  .cell.done { background: var(--green-bg); border-color: #c4e3d2; color: #1c6b41; }
+  .cell.cur {
+    border-color: #dda43a; border-width: 2px;
+    box-shadow: 0 2px 8px rgba(221,164,58,.22); background: #fffaf0;
+  }
+
+  .legend { display: flex; gap: 14px; margin-top: 9px; font-size: 11.5px; color: var(--txt2); flex-wrap: wrap; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .sw { width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--line); }
+  .sw.b { background: var(--blue-bg); border-color: #b9d0ef; }
+  .sw.g { background: var(--green-bg); border-color: #c4e3d2; }
+  .sw.c { background: #fffaf0; border-color: #dda43a; }
+
+  .stack-row { display: flex; align-items: flex-end; gap: 6px; flex-wrap: wrap; min-height: 58px; }
+  .sedge { font-size: 11px; color: var(--txt3); padding-bottom: 18px; flex-shrink: 0; }
+  .scell {
+    width: 62px; border-radius: 8px; border: 1px solid #b9d0ef;
+    background: var(--blue-bg); text-align: center; padding: 5px 0 6px;
+    transition: all .15s;
+  }
+  .scell .si { display: block; font-family: var(--mono); font-size: 10px; color: #6d8cba; line-height: 1.3; }
+  .scell .sv { display: block; font-family: var(--mono); font-size: 17px; font-weight: 600; color: #1c4f9e; line-height: 1.2; }
+  .scell.top {
+    border-color: #dda43a; border-width: 2px;
+    background: #fffaf0; box-shadow: 0 2px 8px rgba(221,164,58,.22);
+  }
+  .scell.top .sv { color: #8a5a0c; }
+  .scell.pop { border-color: #e0a49c; background: var(--red-bg); }
+  .scell.pop .sv { color: var(--red); }
+  .stack-empty {
+    border: 1px dashed #cfccc3; border-radius: 8px;
+    padding: 17px 26px; color: var(--txt3); font-size: 12.5px;
+  }
+  .stack-meta { font-size: 11.5px; color: var(--txt2); margin-top: 8px; }
+  .stack-meta b { color: var(--txt); font-weight: 500; }
+
+  .vars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .v {
+    background: #faf9f6; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 9px; display: flex; align-items: center;
+    justify-content: space-between; gap: 8px;
+  }
+  .v .k { font-family: var(--mono); font-size: 11.5px; color: var(--txt2); }
+  .v .val {
+    font-family: var(--mono); font-size: 14px; font-weight: 600;
+    color: var(--txt3); transition: color .15s; white-space: nowrap;
+  }
+  .v.set .val { color: var(--txt); }
+  .v.neg .val { color: var(--red); }
+  .v.pos .val { color: var(--green); }
+
+  .ansbox {
+    display: flex; align-items: baseline; gap: 10px;
+    background: var(--green-bg); border: 1px solid #c4e3d2;
+    border-radius: 9px; padding: 10px 14px;
+  }
+  .ansbox .k { font-size: 12px; color: #3f6b53; font-family: var(--mono); }
+  .ansbox .val { font-size: 15px; font-weight: 600; color: var(--green); font-family: var(--mono); line-height: 1.4; }
+  .ansbox .hint { font-size: 11.5px; color: #5d8a72; margin-left: auto; white-space: nowrap; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    font-family: var(--mono); font-size: 11.5px; padding: 3px 8px;
+    border-radius: 6px; background: var(--green-bg); color: #1c6b41;
+    border: 1px solid #c4e3d2;
+  }
+  .empty { font-size: 12px; color: var(--txt3); }
+
+  .progress { height: 2px; background: var(--line); flex-shrink: 0; }
+  .progress .bar { height: 100%; background: #dda43a; width: 0; transition: width .12s linear; }
+
+  @media (max-width: 960px) {
+    main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="title">单调栈 · 逐行演示<small>a = [3, 1, 4, 1, 5]</small></div>
+    <div class="spacer"></div>
+    <div class="controls">
+      <div class="speed" id="speed">
+        <button data-v="900">慢</button>
+        <button data-v="560" class="on">中</button>
+        <button data-v="300">快</button>
+        <button data-v="130">极快</button>
+      </div>
+      <button id="btnReset">重置</button>
+      <button id="btnPrev">上一步</button>
+      <button id="btnPlay" class="primary">播放</button>
+      <button id="btnNext">下一步</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <div class="phead"><b>代码</b><span id="stepInfo">第 1 / 1 步</span></div>
+      <div class="code-scroll" id="codeScroll"></div>
+      <div class="progress"><div class="bar" id="bar"></div></div>
+    </section>
+
+    <section class="panel">
+      <div class="phead"><b>数据</b><span id="phaseInfo">准备中</span></div>
+      <div class="data-scroll">
+        <div class="note"><span class="dot"></span><span id="note">准备开始</span></div>
+
+        <!-- ↓↓↓ 数据面板：按你的算法增删 .block ↓↓↓ -->
+        <div class="block">
+          <div class="btitle">数组 a 与答案 ans</div>
+          <div class="arr-grid" id="arrGrid"></div>
+          <div class="legend">
+            <span><i class="sw c"></i>当前处理</span>
+            <span><i class="sw b"></i>还在栈里等</span>
+            <span><i class="sw g"></i>已经结算</span>
+          </div>
+        </div>
+
+        <div class="block">
+          <div class="btitle">栈 st（栈底在左，栈顶在右）</div>
+          <div id="stackBox"></div>
+          <div class="stack-meta" id="stackMeta"></div>
+        </div>
+
+        <div class="block">
+          <div class="btitle">变量</div>
+          <div class="vars" id="vars"></div>
+        </div>
+
+        <div class="block">
+          <div class="btitle">答案</div>
+          <div class="ansbox">
+            <span class="k">ans =</span>
+            <span class="val" id="ansVal">—</span>
+            <span class="hint" id="ansHint"></span>
+          </div>
+        </div>
+
+        <div class="block">
+          <div class="btitle">已结算名单</div>
+          <div class="chips" id="settledList"><span class="empty">还没有</span></div>
+        </div>
+        <!-- ↑↑↑ 数据面板结束 ↑↑↑ -->
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+/* ==TRACE-BEGIN== */
+// 这一块只许放纯计算，不许碰 DOM —— 校验脚本会把它单独抽出来跑
+
+const INPUT = [3, 1, 4, 1, 5];
+
+const CODE = `#include <iostream>
+#include <vector>
+#include <stack>
+using namespace std;
+
+int main() {
+    int n; cin >> n;
+    vector<int> a(n);
+    for (int i = 0; i < n; i++) cin >> a[i];
+
+    vector<int> ans(n, -1);     // 默认 -1：右边没有更大的
+    stack<int> st;              // 存的是下标，不是值
+
+    for (int i = 0; i < n; i++) {
+        // 只要当前数比栈顶大，栈顶的答案就确定了
+        while (!st.empty() && a[st.top()] < a[i]) {
+            ans[st.top()] = a[i];   // 回填答案
+            st.pop();               // 找到答案，出栈
+        }
+        st.push(i);                 // 自己进栈继续等
+    }
+
+    for (int i = 0; i < n; i++) cout << ans[i] << " ";
+}`.split('\n');
+
+// 行号表：CODE 改了必须同步改这张表。生成器里只准引用 L，不准写死数字
+const L = {
+  readN: 7, alloc: 8, readA: 9,
+  initAns: 11, initSt: 12,
+  loop: 14, while: 16, fill: 17, pop: 18, push: 20,
+  loopEnd: 21, output: 23
+};
+
+function* run(input) {
+  const n = input.length;
+  const a = input.slice();
+  const ans = new Array(n).fill(-1);
+  const st = [];
+  const settled = [];
+
+  // 变量表：null = 此刻不适用，渲染成 —
+  const V = {
+    i: null, size: 0, topIdx: null, topVal: null,
+    cur: null, cmp: null, filled: null, popped: null,
+    phase: 'init'
+  };
+
+  // 快照工厂：所有数组都必须拷贝，漏一个就会污染历史步
+  function S(line, note) {
+    return {
+      line, note, n,
+      a: a.slice(), ans: ans.slice(), st: st.slice(),
+      settled: settled.map(x => ({ ...x })),
+      vars: { ...V }
+    };
+  }
+
+  V.phase = 'init';
+  yield S(L.readN, `读入 n = ${n}，一共 ${n} 个数`);
+  yield S(L.alloc, `开数组 a，长度 ${n}，元素先空着`);
+  for (let k = 0; k < n; k++) {
+    a[k] = input[k];
+    V.cur = k;
+    yield S(L.readA, `读入 a[${k}] = ${a[k]}`);
+  }
+  V.cur = null;
+
+  V.phase = 'init2';
+  yield S(L.initAns, `ans 全部填 -1：意思是「右边没有比我大的数」`);
+  V.size = 0;
+  yield S(L.initSt, `开一个空栈 st，它只装下标，不装值`);
+
+  V.phase = 'main';
+  for (let k = 0; k < n; k++) {
+    V.i = k; V.cur = k;
+    V.topIdx = null; V.topVal = null; V.cmp = null;
+    V.filled = null; V.popped = null;
+    V.size = st.length;
+    yield S(L.loop, `i = ${k}，轮到 a[${k}] = ${a[k]} 进场`);
+
+    while (true) {
+      if (st.length === 0) {
+        V.cmp = '栈空'; V.topIdx = null; V.topVal = null; V.size = 0;
+        yield S(L.while, `栈是空的 → !st.empty() 为假，while 一个都不弹`);
+        break;
+      }
+
+      const t = st[st.length - 1];
+      V.topIdx = t; V.topVal = a[t]; V.size = st.length;
+
+      if (a[t] < a[k]) {
+        V.cmp = '可以弹';
+        yield S(L.while, `栈顶是 ${t} 号（值 ${a[t]}），${a[t]} < ${a[k]} → 成立，${t} 号的答案确定了`);
+
+        ans[t] = a[k];
+        settled.push({ idx: t, val: a[t], got: a[k] });
+        V.filled = t;
+        yield S(L.fill, `ans[${t}] = ${a[k]} ← ${t} 号右边第一个更大的数就是 ${a[k]}`);
+
+        V.filled = null;
+        st.pop();
+        V.popped = t; V.size = st.length;
+        yield S(L.pop, `${t} 号出栈。它是「拿到答案才走的」，不是被丢掉`);
+        V.popped = null;
+      } else {
+        V.cmp = '不弹';
+        yield S(L.while, `栈顶是 ${t} 号（值 ${a[t]}），${a[t]} ≥ ${a[k]} → 不成立，while 结束`);
+        break;
+      }
+    }
+
+    st.push(k);
+    V.size = st.length; V.topIdx = k; V.topVal = a[k]; V.cmp = null;
+    yield S(L.push, `${k} 号入栈 → 栈里现在是 ${st.map(x => a[x]).join(' , ')}（栈底到栈顶）`);
+  }
+
+  V.cur = null; V.topIdx = null; V.topVal = null;
+  V.cmp = null; V.filled = null; V.popped = null;
+  V.size = st.length; V.phase = 'done';
+  yield S(L.loopEnd, `主循环结束。栈里还剩 ${st.length} 个人，它们右边都没有更大的数`);
+  yield S(L.output, `输出 ans = [${ans.join(', ')}]`);
+}
+
+// 可选的暴力解，返回值和最后一步快照里的 ans 同构 —— 写了就自动对拍
+function brute(input) {
+  const n = input.length, ans = new Array(n).fill(-1);
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (input[j] > input[i]) { ans[i] = input[j]; break; }
+    }
+  }
+  return ans;
+}
+/* ==TRACE-END== */
+
+// ======================= 以下都是渲染和播放控制，一般不用改 =======================
+
+const steps = [...run(INPUT)];
+document.querySelector('.title small').textContent =
+  `a = [${INPUT.join(', ')}]，n = ${INPUT.length}`;
+
+let idx = 0;
+let timer = null;
+let playing = false;
+let speed = 560;
+
+// 构造代码行
+const codeScroll = document.getElementById('codeScroll');
+CODE.forEach((line, i) => {
+  const div = document.createElement('div');
+  div.className = 'cl';
+  div.dataset.line = i + 1;
+  const ln = document.createElement('span');
+  ln.className = 'ln';
+  ln.textContent = i + 1;
+  const cd = document.createElement('span');
+  cd.className = 'cd';
+  cd.textContent = line.length ? line : ' ';
+  div.appendChild(ln);
+  div.appendChild(cd);
+  codeScroll.appendChild(div);
+});
+const codeEls = [...document.querySelectorAll('.cl')];
+
+// 变量表要显示哪些键，固定不变
+const VARS_DEF = [
+  ['i', '当前下标'],
+  ['size', '栈的大小'],
+  ['topIdx', '栈顶下标'],
+  ['topVal', '栈顶的值'],
+  ['cmp', '判定'],
+  ['a[i]', '当前的数']
+];
+
+function aCls(i, s) {
+  const v = s.vars;
+  let c = '';
+  if (s.st.includes(i)) c += ' in';
+  if (v.filled === i) c += ' done';
+  if (v.cur === i) c += ' cur';
+  return c;
+}
+
+function ansCls(i, s) {
+  let c = '';
+  if (s.ans[i] !== -1) c += ' done';
+  if (s.vars.filled === i) c += ' cur';
+  return c;
+}
+
+function renderArray(s) {
+  const g = document.getElementById('arrGrid');
+  const n = s.n;
+  g.style.gridTemplateColumns = `44px repeat(${n}, 44px)`;
+
+  let h = '<div></div>';
+  for (let i = 0; i < n; i++) h += `<div class="aidx">${i}</div>`;
+
+  h += '<div class="albl">a</div>';
+  for (let i = 0; i < n; i++) h += `<div class="cell${aCls(i, s)}">${s.a[i]}</div>`;
+
+  h += '<div class="albl">ans</div>';
+  for (let i = 0; i < n; i++) {
+    const v = s.ans[i];
+    h += `<div class="mini${ansCls(i, s)}">${v === -1 ? '·' : v}</div>`;
+  }
+  g.innerHTML = h;
+}
+
+function renderStack(s) {
+  const box = document.getElementById('stackBox');
+  const v = s.vars;
+  if (s.st.length === 0) {
+    box.innerHTML = '<div class="stack-empty">空栈</div>';
+  } else {
+    let h = '<div class="stack-row"><span class="sedge">栈底</span>';
+    s.st.forEach(t => {
+      let cls = 'scell';
+      if (v.topIdx === t && v.popped !== t) cls += ' top';
+      if (v.popped === t) cls += ' pop';
+      h += `<div class="${cls}"><span class="si">${t} 号</span><span class="sv">${s.a[t]}</span></div>`;
+    });
+    h += '<span class="sedge">栈顶</span></div>';
+    box.innerHTML = h;
+  }
+  document.getElementById('stackMeta').innerHTML =
+    `大小 <b>${s.st.length}</b>　` +
+    (s.st.length ? `栈顶 = <b>${s.st[s.st.length - 1]} 号</b>（值 ${s.a[s.st[s.st.length - 1]]}）` : '栈里没人');
+}
+
+function renderVars(s) {
+  const box = document.getElementById('vars');
+  box.innerHTML = VARS_DEF.map(([k, desc]) => {
+    const raw = k === 'a[i]'
+      ? (s.vars.cur === null ? null : s.a[s.vars.cur])
+      : s.vars[k];
+    let cls = 'v';
+    const has = raw !== null && raw !== undefined && raw !== '';
+    if (has) cls += ' set';
+    return `<div class="${cls}" title="${desc}"><span class="k">${k}</span><span class="val">${has ? raw : '—'}</span></div>`;
+  }).join('');
+}
+
+function render() {
+  const s = steps[idx];
+
+  codeEls.forEach(el => el.classList.toggle('active', Number(el.dataset.line) === s.line));
+  const act = codeEls.find(el => Number(el.dataset.line) === s.line);
+  if (act) act.scrollIntoView({ block: 'nearest' });
+
+  document.getElementById('note').textContent = s.note;
+  document.getElementById('stepInfo').textContent = `第 ${idx + 1} / ${steps.length} 步`;
+  const phaseMap = { init: '读入数据', init2: '初始化', main: '主循环', done: '结束' };
+  document.getElementById('phaseInfo').textContent = phaseMap[s.vars.phase] || '';
+
+  renderArray(s);
+  renderStack(s);
+  renderVars(s);
+
+  document.getElementById('ansVal').textContent = '[' + s.ans.join(', ') + ']';
+  document.getElementById('ansHint').textContent = `已结算 ${s.settled.length} / ${s.n}`;
+
+  const sl = document.getElementById('settledList');
+  sl.innerHTML = s.settled.length === 0
+    ? '<span class="empty">还没有</span>'
+    : s.settled.map(x => `<span class="chip">${x.idx} 号 ${x.val} → 答案 ${x.got}</span>`).join('');
+
+  document.getElementById('bar').style.width = ((idx + 1) / steps.length * 100) + '%';
+  document.getElementById('btnPrev').disabled = idx === 0;
+  document.getElementById('btnNext').disabled = idx === steps.length - 1;
+}
+
+function stop() {
+  playing = false;
+  clearTimeout(timer);
+  document.getElementById('btnPlay').textContent = '播放';
+}
+
+function play() {
+  if (playing) return;
+  if (idx >= steps.length - 1) idx = 0;
+  playing = true;
+  document.getElementById('btnPlay').textContent = '暂停';
+  const tick = () => {
+    if (!playing) return;
+    if (idx >= steps.length - 1) { stop(); render(); return; }
+    idx++;
+    render();
+    timer = setTimeout(tick, speed);
+  };
+  timer = setTimeout(tick, 120);
+}
+
+document.getElementById('btnPlay').onclick = () => playing ? stop() : play();
+document.getElementById('btnNext').onclick = () => { stop(); if (idx < steps.length - 1) { idx++; render(); } };
+document.getElementById('btnPrev').onclick = () => { stop(); if (idx > 0) { idx--; render(); } };
+document.getElementById('btnReset').onclick = () => { stop(); idx = 0; render(); };
+
+document.getElementById('speed').onclick = (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  speed = Number(b.dataset.v);
+  [...e.currentTarget.children].forEach(x => x.classList.toggle('on', x === b));
+};
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') { stop(); if (idx < steps.length - 1) { idx++; render(); } }
+  if (e.key === 'ArrowLeft') { stop(); if (idx > 0) { idx--; render(); } }
+  if (e.key === ' ') { e.preventDefault(); playing ? stop() : play(); }
+});
+
+// 深链接：#step=8 直接跳到第 9 步，截图和分享都用得上
+const hm = location.hash.match(/step=(\d+)/);
+if (hm) idx = Math.min(Number(hm[1]), steps.length - 1);
+
+render();
+</script>
+</body>
+</html>

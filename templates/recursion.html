@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>递归 · 三种形态三张图</title>
+<style>
+:root{
+  --ink:#2c2b26; --dim:#8b8779; --faint:#a5a193;
+  --paper:#fbfaf5; --card:#ffffff; --line:#e2ddd0; --line2:#d3cdbc;
+  --amber:#c07c14; --amber-bg:#fdf3e0; --amber-line:#e8c98d;
+  --blue:#2f6fd0; --blue-bg:#eaf1fb;
+  --green:#17804a; --green-bg:#e8f5ee;
+  --red:#c0392b; --red-bg:#fbeeec;
+  --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--sans);font-size:14px;-webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;
+}
+
+/* ---------- 顶栏 ---------- */
+header{
+  padding:12px 20px 0;border-bottom:1px solid var(--line);
+  background:var(--card);
+}
+h1{
+  margin:0 0 10px;font-size:15px;font-weight:650;letter-spacing:.2px;
+  display:flex;align-items:baseline;gap:10px;
+}
+h1 small{font-size:12px;font-weight:400;color:var(--dim)}
+.tabs{display:flex;gap:2px;flex-wrap:wrap}
+.tabs button{
+  appearance:none;border:1px solid transparent;border-bottom:none;
+  background:transparent;color:var(--dim);font-family:var(--sans);font-size:12.5px;
+  padding:8px 14px;border-radius:8px 8px 0 0;cursor:pointer;position:relative;top:1px;
+  transition:.15s;
+}
+.tabs button:hover{color:var(--ink);background:#f6f4ec}
+.tabs button.on{
+  color:var(--ink);background:var(--paper);border-color:var(--line);
+  font-weight:600;
+}
+.tabs button.on::after{
+  content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--paper);
+}
+.tabs button b{font-weight:700;color:var(--amber);margin-right:5px}
+
+/* ---------- 主区 ---------- */
+main{
+  flex:1;display:grid;grid-template-columns:minmax(320px,40%) 1fr;
+  overflow:hidden;min-height:0;
+}
+.pane{display:flex;flex-direction:column;min-width:0;min-height:0}
+.pane.code{border-right:1px solid var(--line)}
+.pane-hd{
+  flex:0 0 auto;padding:8px 16px;font-size:11px;color:var(--dim);
+  letter-spacing:.5px;text-transform:uppercase;
+  border-bottom:1px solid var(--line);background:#f8f6ee;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.pane-hd em{font-style:normal;color:var(--faint);text-transform:none;letter-spacing:0}
+
+/* 代码 */
+#codeBody{
+  flex:1;overflow:auto;margin:0;padding:10px 0;font-family:var(--mono);
+  font-size:12.5px;line-height:1.85;background:var(--card);
+}
+.cl{display:flex;padding:0 14px 0 0;white-space:pre;transition:background .15s}
+.cl .ln{
+  flex:0 0 34px;text-align:right;padding-right:12px;color:#c8c3b4;
+  user-select:none;font-size:11.5px;
+}
+.cl .ct{flex:1;color:#3a3833}
+.cl.on{background:var(--amber-bg);box-shadow:inset 3px 0 0 var(--amber)}
+.cl.on .ln{color:var(--amber);font-weight:700}
+.cl.on .ct{color:#7a4e0c;font-weight:600}
+
+/* 可视化 */
+#note{
+  flex:0 0 auto;padding:10px 18px;font-size:13px;line-height:1.6;
+  background:var(--amber-bg);border-bottom:1px solid var(--amber-line);
+  color:#6b4508;min-height:44px;
+}
+#note code{font-family:var(--mono);font-size:12px;background:#fff;padding:1px 5px;border-radius:4px;border:1px solid var(--amber-line)}
+#canvas{flex:1;overflow:hidden;padding:10px;display:flex;min-height:0;background:var(--paper)}
+#canvas svg{display:block;width:100%;height:100%;min-width:0}
+
+#vars{
+  flex:0 0 auto;padding:9px 16px;border-top:1px solid var(--line);
+  background:#f8f6ee;display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+}
+.vchip{
+  font-family:var(--mono);font-size:11.5px;padding:3px 9px;border-radius:6px;
+  background:#fff;border:1px solid var(--line2);color:var(--dim);white-space:nowrap;
+}
+.vchip b{color:var(--ink);font-weight:700}
+.vchip.hi{background:var(--amber-bg);border-color:var(--amber-line);color:#7a4e0c}
+.vchip.hi b{color:#7a4e0c}
+
+/* 底部控件 */
+footer{
+  flex:0 0 auto;padding:10px 20px;border-top:1px solid var(--line);
+  background:var(--card);display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+}
+footer button{
+  appearance:none;font-family:var(--sans);font-size:13px;
+  padding:7px 15px;border-radius:8px;border:1px solid var(--line2);
+  background:#fff;color:var(--ink);cursor:pointer;transition:.15s;
+}
+footer button:hover:not(:disabled){border-color:var(--faint);background:#faf8f1}
+footer button:disabled{opacity:.4;cursor:not-allowed}
+footer button.primary{background:var(--amber);border-color:var(--amber);color:#fff;font-weight:600;min-width:82px}
+footer button.primary:hover:not(:disabled){background:#a96c0f;border-color:#a96c0f}
+footer select{
+  font-family:var(--sans);font-size:13px;padding:7px 10px;border-radius:8px;
+  border:1px solid var(--line2);background:#fff;color:var(--ink);cursor:pointer;
+}
+#stepInfo{
+  margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim);
+  letter-spacing:.3px;
+}
+#kbd{margin-left:14px;font-size:11px;color:var(--faint)}
+
+@media (max-width:860px){
+  main{grid-template-columns:1fr;grid-template-rows:38% 62%}
+  .pane.code{border-right:none;border-bottom:1px solid var(--line)}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>递归 <small>三种形态，画法完全不同</small></h1>
+  <div class="tabs" id="tabs"></div>
+</header>
+
+<main>
+  <section class="pane code">
+    <div class="pane-hd"><span>源码</span><em id="codeTitle"></em></div>
+    <pre id="codeBody"></pre>
+  </section>
+  <section class="pane viz">
+    <div id="note"></div>
+    <div id="canvas"></div>
+    <div id="vars"></div>
+  </section>
+</main>
+
+<footer>
+  <button id="btnReset">重头开始</button>
+  <button id="btnPrev">上一步</button>
+  <button id="btnPlay" class="primary">播放</button>
+  <button id="btnNext">下一步</button>
+  <select id="speed">
+    <option value="1400">慢</option>
+    <option value="800" selected>中</option>
+    <option value="380">快</option>
+    <option value="150">极快</option>
+  </select>
+  <span id="stepInfo"></span>
+  <span id="kbd">← → 单步　空格 播放</span>
+</footer>
+
+<script>
+/* ==TRACE-BEGIN== */
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* =====================================================================
+   场景 ①  线性递归 —— fact(5)
+   画法：调用栈帧竖排。绝不画树（线性递归的树是一条竖线）。
+   ===================================================================== */
+const CODE_LINEAR = `long long fact(int n) {
+    if (n <= 1) return 1;
+    return n * fact(n - 1);
+}
+
+int main() {
+    cout << fact(5);
+}`.split('\n');
+
+function* runLinear() {
+  const frames = [];              // 栈底在下
+  const snap = (line, note) => ({
+    line, note,
+    frames: frames.map(f => ({ n: f.n, val: f.val, st: f.st })),
+    depth: frames.length
+  });
+
+  function* call(n) {
+    frames.push({ n, val: null, st: 'wait' });
+    yield snap(2, `调用 <code>fact(${n})</code>，压入调用栈。当前栈深 ${frames.length} 层。`);
+
+    if (n <= 1) {
+      frames[frames.length - 1].st = 'done';
+      frames[frames.length - 1].val = 1;
+      yield snap(2, `<code>n = ${n} ≤ 1</code> 命中递归出口，<b>直接返回 1</b>，不再往下调用。`);
+      frames.pop();
+      yield snap(2, `fact(${n}) 出栈。控制权交回上一层，栈深降到 ${frames.length}。`);
+      return 1;
+    }
+
+    frames[frames.length - 1].st = 'run';
+    yield snap(3, `fact(${n}) 里要算 <code>${n} × fact(${n - 1})</code>，先把它挂起，去调 fact(${n - 1})。`);
+
+    const sub = yield* call(n - 1);
+
+    frames[frames.length - 1].st = 'done';
+    frames[frames.length - 1].val = n * sub;
+    yield snap(3, `拿到下层返回值 ${sub}，算 <code>${n} × ${sub} = ${n * sub}</code>，fact(${n}) 返回 ${n * sub}。`);
+    frames.pop();
+    yield snap(3, `fact(${n}) 出栈，把 ${n * sub} 交给上一层。栈深 ${frames.length}。`);
+    return n * sub;
+  }
+
+  yield snap(7, 'main 里要输出 fact(5)，进入第一次调用。');
+  const r = yield* call(5);
+  yield snap(7, `全部返回完毕，<code>fact(5) = ${r}</code>。栈已清空，深度回到 0。`);
+}
+
+function renderLinear(s) {
+  const W = 460, FH = 56, GAP = 10, PAD = 30;
+  const H = 5 * (FH + GAP) + PAD * 2 + 20;
+  const cx = W / 2, FW = 300;
+  let h = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" width="${W}" height="${H}" style="width:100%;height:100%" xmlns="http://www.w3.org/2000/svg" font-family="var(--sans)">`;
+
+  // 左侧深度标尺（竖排标签贴着数字列）
+  h += `<text x="${cx - FW / 2 - 12}" y="${PAD - 12}" text-anchor="middle" font-size="10" fill="#b4b2a9">深</text>`;
+
+  // 空栈提示
+  if (s.frames.length === 0) {
+    h += `<text x="${cx}" y="${H / 2}" text-anchor="middle" font-size="13" fill="#a5a193">栈已清空 —— 递归全部返回</text>`;
+  }
+
+  s.frames.forEach((f, i) => {
+    const y = H - PAD - (i + 1) * (FH + GAP);
+    let fill = '#ffffff', stroke = '#cbc7b9', txt = '#2c2b26', label = '等待子调用';
+    if (f.st === 'run') { fill = '#fdf3e0'; stroke = '#c07c14'; label = '正在计算'; }
+    if (f.st === 'done') { fill = '#e8f5ee'; stroke = '#17804a'; label = '已算出'; }
+
+    // 连接下一帧的竖线
+    if (i < s.frames.length - 1) {
+      h += `<line x1="${cx}" y1="${y + FH}" x2="${cx}" y2="${y + FH + GAP}" stroke="#d3cdbc" stroke-width="1" stroke-dasharray="2 3"/>`;
+    }
+
+    h += `<rect x="${cx - FW / 2}" y="${y}" width="${FW}" height="${FH}" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="1.6"/>`;
+    h += `<text x="${cx - FW / 2 + 18}" y="${y + 24}" font-size="14.5" font-weight="650" font-family="var(--mono)" fill="${txt}">fact(${f.n})</text>`;
+    h += `<text x="${cx - FW / 2 + 18}" y="${y + 43}" font-size="11" fill="#8b8779">${label}</text>`;
+
+    if (f.val !== null) {
+      h += `<text x="${cx + FW / 2 - 18}" y="${y + 34}" text-anchor="end" font-size="17" font-weight="700" font-family="var(--mono)" fill="#17804a">return ${f.val}</text>`;
+    } else {
+      h += `<text x="${cx + FW / 2 - 18}" y="${y + 34}" text-anchor="end" font-size="13" font-family="var(--mono)" fill="#c0bbac">?</text>`;
+    }
+
+    // 深度数字
+    h += `<text x="${cx - FW / 2 - 14}" y="${y + FH / 2 + 4}" text-anchor="end" font-size="11" font-family="var(--mono)" fill="#b4b2a9">${i + 1}</text>`;
+  });
+
+  // 栈顶标记
+  if (s.frames.length) {
+    const topY = H - PAD - s.frames.length * (FH + GAP) + GAP;
+    h += `<text x="${cx + FW / 2 + 20}" y="${topY + 10}" font-size="10.5" fill="#c07c14">← 栈顶</text>`;
+  }
+
+  return h + '</svg>';
+}
+
+const varsLinear = s => [
+  ['n', s.frames.length ? s.frames[s.frames.length - 1].n : '—', true],
+  ['栈深', s.depth, true],
+  ['返回值', s.frames.length && s.frames[s.frames.length - 1].val !== null
+      ? s.frames[s.frames.length - 1].val : '未定', false]
+];
+
+/* =====================================================================
+   场景 ②  分治递归 —— 二叉树高度
+   画法：递归树。每层节点带"入参"，算完在节点上冒出返回值。
+   ===================================================================== */
+const CODE_DIVIDE = `int height(Node* u) {
+    if (u == nullptr) return 0;
+    int L = height(u->left);
+    int R = height(u->right);
+    return max(L, R) + 1;
+}`.split('\n');
+
+// 树结构（静态）
+const T2 = [
+  { id: 'A', parent: null, val: 'A' },
+  { id: 'B', parent: 'A', val: 'B' },
+  { id: 'C', parent: 'A', val: 'C' },
+  { id: 'D', parent: 'B', val: 'D' },
+  { id: 'E', parent: 'C', val: 'E' },
+  { id: 'F', parent: 'C', val: 'F' }
+];
+const KIDS2 = { A: ['B', 'C'], B: ['D'], C: ['E', 'F'], D: [], E: [], F: [] };
+
+function* runDivide() {
+  const ret = {};      // id -> 高度
+  const entered = {};  // id -> 已进入、还没算出
+  const active = { id: null };
+  const snap = (line, note, extra = {}) => ({
+    line, note, tree: T2, ret: { ...ret }, entered: { ...entered }, active: active.id, ...extra
+  });
+
+  function* go(id) {
+    active.id = id;
+    entered[id] = true;
+    yield snap(2, `进入 <code>height(${id})</code>，它的子节点有 ${KIDS2[id].length} 个。`);
+
+    if (KIDS2[id].length === 0) {
+      ret[id] = 1;
+      yield snap(5, `${id} 是叶子，左右都为空（各返回 0），<code>max(0,0)+1 = 1</code>，${id} 的高度是 1。`);
+      return 1;
+    }
+
+    // 左
+    const kids = KIDS2[id];
+    let L = 0, R = 0;
+    if (kids[0]) {
+      yield snap(3, `先去算 ${id} 的左子树 <code>height(${kids[0]})</code>，先不急着往下算自己。`);
+      L = yield* go(kids[0]);
+      yield snap(3, `左子树回来了，<code>L = ${L}</code>。记在 ${id} 这里。`);
+    } else {
+      yield snap(3, `${id} 没有左孩子，<code>L = 0</code>。`);
+    }
+
+    // 右
+    if (kids[1]) {
+      yield snap(4, `再去算右子树 <code>height(${kids[1]})</code>。`);
+      R = yield* go(kids[1]);
+      yield snap(4, `右子树回来了，<code>R = ${R}</code>。`);
+    } else {
+      yield snap(4, `${id} 没有右孩子，<code>R = 0</code>。`);
+    }
+
+    ret[id] = Math.max(L, R) + 1;
+    yield snap(5, `左右都有结果了：<code>max(${L}, ${R}) + 1 = ${ret[id]}</code>，${id} 的高度是 ${ret[id]}，往上返回。`);
+    return ret[id];
+  }
+
+  const ans = yield* go('A');
+  active.id = null;
+  yield snap(5, `整棵树算完，<code>height(A) = ${ans}</code>。注意顺序是后序：先左、再右、最后自己。`, { finished: true });
+}
+
+/* ---- 通用树布局：后序定宽，前序定位 ---- */
+function layoutTree(nodes, NODE_W = 76, LEVEL_H = 84, GAP = 16) {
+  const kids = {}, span = {}, pos = {};
+  let root = null;
+  nodes.forEach(n => {
+    (kids[n.id] = kids[n.id] || []);
+    if (n.parent === null) root = n.id;
+    else (kids[n.parent] = kids[n.parent] || []).push(n.id);
+  });
+  (function measure(id) {
+    const ch = kids[id] || [];
+    if (!ch.length) return (span[id] = 1);
+    return (span[id] = ch.reduce((s, c) => s + measure(c), 0));
+  })(root);
+  (function place(id, left, depth) {
+    const ch = kids[id] || [];
+    const w = span[id] * (NODE_W + GAP);
+    if (!ch.length) {
+      pos[id] = { x: left + NODE_W / 2, y: depth * LEVEL_H, depth };
+    } else {
+      let cursor = left;
+      ch.forEach(c => { place(c, cursor, depth + 1); cursor += span[c] * (NODE_W + GAP); });
+      pos[id] = { x: (pos[ch[0]].x + pos[ch[ch.length - 1]].x) / 2, y: depth * LEVEL_H, depth };
+    }
+  })(root, 0, 0);
+  return { pos, root, kids, span };
+}
+
+/* ---- 通用树渲染（场景 ②③④ 共用底座，各自传不同的装饰） ---- */
+function svgTree(opt) {
+  const {
+    nodes, layer, NODE_W = 76, NODE_H = 44, LEVEL_H = 84, GAP = 16, PAD = 30,
+    bottomPad = 0, label, sub, style, edgeStyle, extraLayer
+  } = opt;
+  const { pos, span } = layoutTree(nodes, NODE_W, LEVEL_H, GAP);
+  const totalW = Math.max(...nodes.map(n => span[n.id] || 1)) * (NODE_W + GAP);
+  const maxDepth = Math.max(...Object.values(pos).map(p => p.depth));
+  const W = totalW + PAD * 2;
+  const H = maxDepth * LEVEL_H + NODE_H + PAD * 2 + 10 + bottomPad;
+  const allX = Object.values(pos).map(p => p.x);
+  const minX = Math.min(...allX) - NODE_W / 2;
+  const shift = PAD - minX;
+  Object.values(pos).forEach(p => { p.x += shift; });
+
+  let h = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" width="${W}" height="${H}" style="width:100%;height:100%" xmlns="http://www.w3.org/2000/svg" font-family="var(--sans)">`;
+
+  // 边
+  nodes.forEach(n => {
+    if (n.parent === null) return;
+    const p = pos[n.parent], c = pos[n.id];
+    const y1 = p.y + PAD + NODE_H, y2 = c.y + PAD;
+    const st = edgeStyle ? edgeStyle(n, p, c) : { stroke: '#d3cdbc', w: 1.4, dash: '' };
+    h += `<path d="M ${p.x} ${y1} L ${c.x} ${y2}" stroke="${st.stroke}" stroke-width="${st.w}" ${st.dash ? `stroke-dasharray="${st.dash}"` : ''} fill="none"/>`;
+  });
+
+  // 节点
+  nodes.forEach(n => {
+    const p = pos[n.id];
+    const x = p.x - NODE_W / 2, y = p.y + PAD;
+    const st = style(n, p);
+    if (st.skip) return;
+
+    h += `<rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="9"
+      fill="${st.fill}" stroke="${st.stroke}" stroke-width="${st.w || 1.5}"
+      ${st.dash ? `stroke-dasharray="${st.dash}"` : ''} opacity="${st.op == null ? 1 : st.op}"/>`;
+    h += `<text x="${p.x}" y="${y + (sub(n) ? 18 : NODE_H / 2 + 5)}" text-anchor="middle"
+      font-size="${st.fs || 14}" font-weight="650" font-family="var(--mono)" fill="${st.txt}" opacity="${st.op == null ? 1 : st.op}">${esc(label(n))}</text>`;
+    const sb = sub(n);
+    if (sb) {
+      h += `<text x="${p.x}" y="${y + 33}" text-anchor="middle" font-size="11.5"
+        font-family="var(--mono)" fill="${st.subColor || '#17804a'}" opacity="${st.op == null ? 1 : st.op}">${esc(sb)}</text>`;
+    }
+    if (extraLayer) h += extraLayer(n, p, st);
+  });
+
+  return { svg: h + '</svg>', W, H, pos, PAD };
+}
+
+function renderDivide(s) {
+  const r = svgTree({
+    nodes: s.tree,
+    label: n => n.val,
+    sub: n => s.ret[n.id] != null ? 'h=' + s.ret[n.id] : '',
+    style: n => {
+      const done = s.ret[n.id] != null;
+      const isActive = s.active === n.id;
+      const waiting = s.entered[n.id] && !done;
+      if (isActive) return { fill: '#fdf3e0', stroke: '#c07c14', w: 2.4, txt: '#7a4e0c' };
+      if (done) return { fill: '#e8f5ee', stroke: '#17804a', txt: '#0d5c34' };
+      if (waiting) return { fill: '#eaf1fb', stroke: '#2f6fd0', txt: '#1d4f96', w: 1.6 };
+      return { fill: '#ffffff', stroke: '#cbc7b9', txt: '#8b8779' };
+    },
+    edgeStyle: n => {
+      const done = s.ret[n.id] != null;
+      return done
+        ? { stroke: '#17804a', w: 2, dash: '' }
+        : { stroke: '#d3cdbc', w: 1.4, dash: '3 3' };
+    }
+  });
+  return r.svg;
+}
+
+const varsDivide = s => [
+  ['当前节点', s.active || '—', true],
+  ['已算出', Object.keys(s.ret).length + ' / ' + s.tree.length, false],
+  ['A 的高度', s.ret['A'] != null ? s.ret['A'] : '未定', false]
+];
+
+/* =====================================================================
+   场景 ③  回溯 —— 子集 [1,2,3]
+   画法：决策树 + 当前路径高亮 + 结果集逐条增加。
+   ===================================================================== */
+const CODE_BACK = `void dfs(int i, vector<int>& path) {
+    if (i == n) {
+        ans.push_back(path);
+        return;
+    }
+    dfs(i + 1, path);          // 不选 a[i]
+    path.push_back(a[i]);
+    dfs(i + 1, path);          // 选 a[i]
+    path.pop_back();
+}`.split('\n');
+
+const A3 = [1, 2, 3];
+
+// 建完整决策树：节点 id = 选择序列，'N' 不选，'Y' 选
+function buildBackTree(n) {
+  const nodes = [{ id: '', parent: null, step: 0 }];
+  const kids = { '': [] };
+  const stack = [''];
+  while (stack.length) {
+    const cur = stack.shift();
+    const depth = cur.length;
+    if (depth >= n) continue;
+    ['N', 'Y'].forEach(ch => {
+      const id = cur + ch;
+      nodes.push({ id, parent: cur, step: depth + 1, pick: ch === 'Y', val: A3[depth] });
+      (kids[cur] = kids[cur] || []).push(id);
+      kids[id] = [];
+      stack.push(id);
+    });
+  }
+  return nodes;
+}
+const T3 = buildBackTree(3);
+
+function pathOf(id) {
+  // 'YYN' -> [1,2]
+  const out = [];
+  for (let i = 0; i < id.length; i++) if (id[i] === 'Y') out.push(A3[i]);
+  return out;
+}
+
+function* runBack() {
+  const path = [];
+  const ansSet = [];
+  const visited = {};     // id -> true
+  let curId = '';
+
+  const snap = (line, note, extra = {}) => ({
+    line, note, tree: T3, cur: curId,
+    path: [...path], ans: [...ansSet], visited: { ...visited }, ...extra
+  });
+
+  function* dfs(i, id) {
+    curId = id;
+    visited[id] = true;
+    yield snap(2, `进入第 ${i + 1} 层（考虑数字 ${i < 3 ? A3[i] : '—'}），当前路径 <code>[${path.join(',')}]</code>。`);
+
+    if (i === 3) {
+      ansSet.push([...path]);
+      yield snap(4, `走到叶子，路径 <code>[${path.join(',')}]</code> 就是一条解，加入结果集（第 ${ansSet.length} 条）。`);
+      return;
+    }
+
+    yield snap(6, `先走「<b>不选 ${A3[i]}</b>」这一支，路径不动。`);
+    yield* dfs(i + 1, id + 'N');
+    curId = id;
+    yield snap(6, `「不选 ${A3[i]}」那支回来了，回到 <code>[${path.join(',')}]</code>。`);
+
+    path.push(A3[i]);
+    yield snap(7, `改走「<b>选 ${A3[i]}</b>」，把它压进路径 → <code>[${path.join(',')}]</code>。`);
+    yield* dfs(i + 1, id + 'Y');
+
+    path.pop();
+    curId = id;
+    yield snap(9, `两条支都试完了，<b>回溯</b>：把 ${A3[i]} 从路径里弹出 → <code>[${path.join(',')}]</code>。`);
+  }
+
+  yield* dfs(0, '');
+  curId = '';
+  yield snap(4, `全部搜完，共 <b>${ansSet.length}</b> 条子集：${ansSet.map(a => '[' + a.join(',') + ']').join(' ')}。`);
+}
+
+function renderBack(s) {
+  const r = svgTree({
+    nodes: s.tree,
+    NODE_W: 58, NODE_H: 38, LEVEL_H: 76, GAP: 10, bottomPad: 26,
+    label: n => n.id === '' ? '∅'
+      : (n.id.length === 3 ? '[' + pathOf(n.id).join(',') + ']'
+      : (n.pick ? '选' + n.val : '不选' + n.val)),
+    sub: () => '',
+    style: n => {
+      const inPath = s.path.length === n.id.length && pathOf(n.id).join(',') === s.path.join(',');
+      const isCur = n.id === s.cur;
+      const isLeaf = n.id.length === 3;
+      const came = s.visited[n.id];
+      if (isCur) return { fill: '#fdf3e0', stroke: '#c07c14', w: 2.4, txt: '#7a4e0c', fs: 11 };
+      if (inPath) return { fill: '#eaf1fb', stroke: '#2f6fd0', w: 2, txt: '#1d4f96', fs: 11 };
+      if (isLeaf && came) return { fill: '#e8f5ee', stroke: '#17804a', txt: '#0d5c34', fs: 11 };
+      if (came) return { fill: '#f6f4ec', stroke: '#cbc7b9', txt: '#8b8779', fs: 11 };
+      return { fill: '#ffffff', stroke: '#e2ddd0', txt: '#c8c3b4', fs: 11, dash: '3 3' };
+    },
+    edgeStyle: n => {
+      const came = s.visited[n.id];
+      return came ? { stroke: '#b9b5a6', w: 1.6, dash: '' } : { stroke: '#e2ddd0', w: 1.2, dash: '3 3' };
+    }
+  });
+
+  // 左下角：当前路径条
+  const px = 14, py = r.H - 9;
+  let extra = `<text x="${px}" y="${py - 4}" font-size="12" font-family="var(--mono)" fill="#8b8779">path = [${s.path.join(', ')}]　　ans 共 ${s.ans.length} 条</text>`;
+  return r.svg.replace('</svg>', extra + '</svg>');
+}
+
+const varsBack = s => [
+  ['i (层)', s.path.length, false],
+  ['path', '[' + s.path.join(',') + ']', true],
+  ['ans', s.ans.length + ' 条', true],
+  ['已走节点', Object.keys(s.visited).length + ' / ' + s.tree.length, false]
+];
+
+/* =====================================================================
+   场景 ④  记忆化 —— fib(5)
+   画法：递归树 + 命中节点变成灰影，子树不再展开。
+   ===================================================================== */
+const CODE_MEMO = `int fib(int n) {
+    if (n <= 1) return n;
+    if (memo[n]) return memo[n];
+    memo[n] = fib(n - 1) + fib(n - 2);
+    return memo[n];
+}`.split('\n');
+
+// 建完整调用树，id 用路径
+function buildFibTree(n) {
+  const nodes = [];
+  const kids = {};
+  (function build(idx, parent, tag) {
+    nodes.push({ id: idx, parent, n: tag });
+    kids[idx] = [];
+    if (tag <= 1) return;
+    build(idx + 'L', idx, tag - 1);
+    build(idx + 'R', idx, tag - 2);
+  })('', null, n);
+  nodes.forEach(x => {
+    nodes.forEach(y => { if (y.parent === x.id) kids[x.id].push(y.id); });
+  });
+  return nodes;
+}
+const T4 = buildFibTree(5);
+
+function* runMemo() {
+  const memo = {};
+  const active = { id: null };
+  const hitIds = {};      // 命中过的节点（其子树折叠）
+  const hidden = {};      // 因祖先被折叠而不展开
+
+  const snap = (line, note, extra = {}) => ({
+    line, note, tree: T4, memo: { ...memo }, active: active.id,
+    hit: { ...hitIds }, hidden: { ...hidden }, ...extra
+  });
+
+  function* go(id, n) {
+    active.id = id;
+    yield snap(2, `进入 <code>fib(${n})</code>，先看 n ≤ 1 成不成立。`);
+
+    if (n <= 1) {
+      memo[n] = n;
+      yield snap(2, `<code>n = ${n} ≤ 1</code>，直接返回 ${n}，不查表。`);
+      return n;
+    }
+
+    if (memo[n] != null) {
+      hitIds[id] = true;
+      yield snap(3, `<b>memo[${n}] = ${memo[n]} 已经算过了</b>，直接返回 ${memo[n]} —— <b>这棵子树整个不用展开</b>。`);
+      return memo[n];
+    }
+
+    yield snap(3, `memo[${n}] 还是空的，得老实往下拆。`);
+
+    // 左
+    const lc = id + 'L';
+    yield snap(4, `先算 <code>fib(${n - 1})</code>。`);
+    const a = yield* go(lc, n - 1);
+    active.id = id;
+    yield snap(4, `左支回来 <code>fib(${n - 1}) = ${a}</code>，先拿着。`);
+
+    // 右
+    const rc = id + 'R';
+    yield snap(4, `再算 <code>fib(${n - 2})</code>。`);
+    const b = yield* go(rc, n - 2);
+    active.id = id;
+    yield snap(4, `右支回来 <code>fib(${n - 2}) = ${b}</code>。`);
+
+    memo[n] = a + b;
+    yield snap(4, `两面都到齐：<code>${a} + ${b} = ${memo[n]}</code>，写进 <code>memo[${n}]</code>。`);
+    yield snap(5, `fib(${n}) 返回 ${memo[n]}。下次再问 fib(${n})，第 3 行就能直接截住。`);
+    return memo[n];
+  }
+
+  const r = yield* go('', 5);
+  active.id = null;
+  const total = T4.length;
+  const hitKeys = Object.keys(hitIds);
+  // 被折叠的后代：祖先链上有人命中的节点，它们一次都没被调用
+  const folded = T4.filter(n => hitKeys.some(h => n.id !== h && n.id.startsWith(h))).length;
+  yield snap(5, `算完，<code>fib(5) = ${r}</code>。整棵树本该有 ${total} 个调用，其中 <b>${hitKeys.length} 个被 memo 直接截断</b>，连带 <b>${folded} 个后代</b>一次都没调，只走了 ${total - folded} 个。`);
+}
+
+function renderMemo(s) {
+  // 被折叠：祖先链上有 hit 的节点
+  const collapsed = {};
+  const byId = {};
+  s.tree.forEach(n => byId[n.id] = n);
+  Object.keys(s.hit).forEach(hid => {
+    s.tree.forEach(n => {
+      if (n.id !== hid && n.id.startsWith(hid)) collapsed[n.id] = true;
+    });
+  });
+
+  const r = svgTree({
+    nodes: s.tree,
+    NODE_W: 72, NODE_H: 40, LEVEL_H: 80, GAP: 20, bottomPad: 28,
+    label: n => 'fib(' + n.n + ')',
+    sub: n => s.memo[n.n] != null ? '= ' + s.memo[n.n] : '',
+    style: n => {
+      if (collapsed[n.id]) return { skip: true };
+      const isHit = s.hit[n.id];
+      const isCur = s.active === n.id;
+      if (isCur) return { fill: '#fdf3e0', stroke: '#c07c14', w: 2.4, txt: '#7a4e0c', fs: 12 };
+      if (isHit) return { fill: '#efeee7', stroke: '#a5a193', txt: '#7d7969', fs: 12, dash: '4 3', subColor: '#a5a193' };
+      if (s.memo[n.n] != null) return { fill: '#e8f5ee', stroke: '#17804a', txt: '#0d5c34', fs: 12 };
+      return { fill: '#ffffff', stroke: '#cbc7b9', txt: '#8b8779', fs: 12 };
+    },
+    edgeStyle: n => {
+      if (collapsed[n.id]) return { stroke: '#eeeae0', w: 1, dash: '2 4' };
+      if (s.hit[n.id]) return { stroke: '#c0bbac', w: 1.4, dash: '4 3' };
+      return { stroke: '#d3cdbc', w: 1.4, dash: '' };
+    }
+  });
+
+  // memo 表：右下角
+  const keys = Object.keys(s.memo).map(Number).sort((a, b) => a - b);
+  let extra = `<text x="14" y="${r.H - 10}" font-size="12" font-family="var(--mono)" fill="#8b8779">memo = { ${keys.map(k => k + ':' + s.memo[k]).join(', ')} }</text>`;
+  return r.svg.replace('</svg>', extra + '</svg>');
+}
+
+const varsMemo = s => {
+  const hits = Object.keys(s.hit).length;
+  return [
+    ['当前', s.active ? 'fib(' + (s.tree.find(n => n.id === s.active) || {}).n + ')' : '—', true],
+    ['memo 条目', Object.keys(s.memo).length, false],
+    ['被截断的子树', hits, true],
+    ['fib(5)', s.memo[5] != null ? s.memo[5] : '未定', false]
+  ];
+};
+
+/* =====================================================================
+   场景注册
+   ===================================================================== */
+const SCENES = {
+  linear: {
+    tab: '① 线性递归', sub: '调用栈帧', title: 'fact(5)',
+    code: CODE_LINEAR, gen: runLinear, render: renderLinear, vars: varsLinear,
+    hint: '线性递归的递归树是一条竖线，画树等于白占屏幕'
+  },
+  divide: {
+    tab: '② 分治递归', sub: '递归树', title: 'height(A)',
+    code: CODE_DIVIDE, gen: runDivide, render: renderDivide, vars: varsDivide,
+    hint: '返回值从叶子往上冒，顺序是后序'
+  },
+  backtrack: {
+    tab: '③ 回溯', sub: '决策树', title: '子集 [1,2,3]',
+    code: CODE_BACK, gen: runBack, render: renderBack, vars: varsBack,
+    hint: '看的是「进一格、退一格」'
+  },
+  memo: {
+    tab: '④ 记忆化', sub: '砍子树', title: 'fib(5)',
+    code: CODE_MEMO, gen: runMemo, render: renderMemo, vars: varsMemo,
+    hint: '命中的那一刻，右边整棵子树不再展开'
+  }
+};
+
+// 供校验脚本使用
+const INPUT = 5;
+const CODE = CODE_LINEAR;
+const run = runLinear;
+const allRuns = {
+  linear: runLinear, divide: runDivide, backtrack: runBack, memo: runMemo
+};
+const allCodes = {
+  linear: CODE_LINEAR, divide: CODE_DIVIDE, backtrack: CODE_BACK, memo: CODE_MEMO
+};
+const allScenes = SCENES;
+
+// 校验断言：每个场景跑完必须对得上
+const expect = {
+  linear: steps => {
+    const hit = steps.some(s => s.frames.some(f => f.val === 120));
+    if (!hit) return '全程没出现过 fact(5) = 120，栈帧返回值算错了';
+    if (steps[steps.length - 1].frames.length !== 0) return '结束时栈没清空';
+    return true;
+  },
+  divide: { path: 'ret.A', value: 3 },
+  backtrack: { path: 'ans.length', value: 8 },
+  memo: { path: 'memo.5', value: 5 }
+};
+/* ==TRACE-END== */
+
+const $ = id => document.getElementById(id);
+
+/* =====================================================================
+   播放器
+   ===================================================================== */
+let cur = 'linear', steps = [], idx = 0, timer = null, playing = false;
+
+function paintTabs() {
+  $('tabs').innerHTML = Object.entries(SCENES).map(([k, sc]) =>
+    `<button data-k="${k}" class="${k === cur ? 'on' : ''}"><b>${sc.tab.slice(0, 1)}</b>${sc.tab.slice(1)}<span style="opacity:.55;font-size:11px;margin-left:6px">${sc.sub}</span></button>`
+  ).join('');
+  $('tabs').querySelectorAll('button').forEach(b => {
+    b.onclick = () => { stop(); cur = b.dataset.k; build(); paintTabs(); };
+  });
+}
+
+function renderCode(lines, onLine) {
+  const box = $('codeBody');
+  box.innerHTML = lines.map((t, i) =>
+    `<div class="cl${i + 1 === onLine ? ' on' : ''}"><span class="ln">${i + 1}</span><span class="ct">${esc(t)}</span></div>`
+  ).join('');
+  const el = box.querySelector('.cl.on');
+  if (el) {
+    const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+    if (r.top < b.top || r.bottom > b.bottom) el.scrollIntoView({ block: 'center' });
+  }
+}
+
+function draw() {
+  const sc = SCENES[cur];
+  const s = steps[idx];
+  renderCode(sc.code, s.line);
+  $('note').innerHTML = s.note;
+  $('canvas').innerHTML = sc.render(s);
+  $('vars').innerHTML = sc.vars(s).map(([k, v, hi]) =>
+    `<span class="vchip${hi ? ' hi' : ''}">${k} <b>${esc(v)}</b></span>`).join('');
+  $('stepInfo').textContent = `第 ${idx + 1} / ${steps.length} 步`;
+  $('btnPrev').disabled = idx === 0;
+  $('btnNext').disabled = idx === steps.length - 1;
+  $('codeTitle').textContent = sc.title;
+}
+
+function build() {
+  const sc = SCENES[cur];
+  steps = [...sc.gen()];
+  idx = 0;
+  draw();
+}
+
+function next() { if (idx < steps.length - 1) { idx++; draw(); } else stop(); }
+function prev() { if (idx > 0) { idx--; draw(); } }
+function stop() {
+  playing = false; clearInterval(timer); timer = null;
+  $('btnPlay').textContent = '播放';
+}
+function play() {
+  if (playing) return stop();
+  if (idx >= steps.length - 1) idx = 0;
+  playing = true; $('btnPlay').textContent = '暂停';
+  timer = setInterval(next, +$('speed').value);
+  draw();
+}
+
+$('btnPlay').onclick = play;
+$('btnNext').onclick = () => { stop(); next(); };
+$('btnPrev').onclick = () => { stop(); prev(); };
+$('btnReset').onclick = () => { stop(); build(); };
+$('speed').onchange = () => { if (playing) { clearInterval(timer); timer = setInterval(next, +$('speed').value); } };
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') { e.preventDefault(); stop(); next(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); stop(); prev(); }
+  else if (e.key === ' ') { e.preventDefault(); play(); }
+});
+
+// ---- 深链接：#scene=backtrack&step=12（校验脚本截图用） ----
+(function init() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  const sc = p.get('scene');
+  if (sc && SCENES[sc]) cur = sc;
+  paintTabs();
+  build();
+  const st = p.get('step');
+  if (st != null && st !== '') {
+    idx = st === 'last' ? steps.length - 1 : Math.max(0, Math.min(+st || 0, steps.length - 1));
+    draw();
+  }
+})();
+</script>
+</body>
+</html>

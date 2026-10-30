@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>搜索 · 三种行走方式三张图</title>
+<style>
+:root{
+  --ink:#2c2b26; --dim:#8b8779; --faint:#a5a193;
+  --paper:#fbfaf5; --card:#ffffff; --line:#e2ddd0; --line2:#d3cdbc;
+  --amber:#c07c14; --amber-bg:#fdf3e0; --amber-line:#e8c98d;
+  --blue:#2f6fd0; --blue-bg:#eaf1fb;
+  --green:#17804a; --green-bg:#e8f5ee;
+  --red:#c0392b; --red-bg:#fbeeec;
+  --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+header{padding:12px 20px 0;border-bottom:1px solid var(--line);background:var(--card)}
+h1{margin:0 0 10px;font-size:15px;font-weight:650;letter-spacing:.2px;display:flex;align-items:baseline;gap:10px}
+h1 small{font-size:12px;font-weight:400;color:var(--dim)}
+.tabs{display:flex;gap:2px;flex-wrap:wrap}
+.tabs button{appearance:none;border:1px solid transparent;border-bottom:none;background:transparent;color:var(--dim);font-family:var(--sans);font-size:12.5px;padding:8px 14px;border-radius:8px 8px 0 0;cursor:pointer;position:relative;top:1px;transition:.15s}
+.tabs button:hover{color:var(--ink);background:#f6f4ec}
+.tabs button.on{color:var(--ink);background:var(--paper);border-color:var(--line);font-weight:600}
+.tabs button.on::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--paper)}
+.tabs button b{font-weight:700;color:var(--amber);margin-right:5px}
+main{flex:1;display:grid;grid-template-columns:minmax(320px,40%) 1fr;overflow:hidden;min-height:0}
+.pane{display:flex;flex-direction:column;min-width:0;min-height:0}
+.pane.code{border-right:1px solid var(--line)}
+.pane-hd{flex:0 0 auto;padding:8px 16px;font-size:11px;color:var(--dim);letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid var(--line);background:#f8f6ee;display:flex;justify-content:space-between;align-items:center}
+.pane-hd em{font-style:normal;color:var(--faint);text-transform:none;letter-spacing:0}
+#codeBody{flex:1;overflow:auto;margin:0;padding:10px 0;font-family:var(--mono);font-size:12.5px;line-height:1.85;background:var(--card)}
+.cl{display:flex;padding:0 14px 0 0;white-space:pre;transition:background .15s}
+.cl .ln{flex:0 0 30px;text-align:right;padding-right:10px;color:#c8c3b4;user-select:none;font-size:11.5px}
+.cl .ct{flex:1;color:#3a3833}
+.cl.on{background:var(--amber-bg);box-shadow:inset 3px 0 0 var(--amber)}
+.cl.on .ln{color:var(--amber);font-weight:700}
+.cl.on .ct{color:#7a4e0c;font-weight:600}
+#note{flex:0 0 auto;padding:10px 18px;font-size:13px;line-height:1.6;background:var(--amber-bg);border-bottom:1px solid var(--amber-line);color:#6b4508;min-height:44px}
+#note code{font-family:var(--mono);font-size:12px;background:#fff;padding:1px 5px;border-radius:4px;border:1px solid var(--amber-line)}
+#canvas{flex:1;overflow:hidden;padding:8px;display:flex;min-height:0;background:var(--paper)}
+#canvas svg{display:block;width:100%;height:100%;min-width:0}
+#vars{flex:0 0 auto;padding:9px 16px;border-top:1px solid var(--line);background:#f8f6ee;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.vchip{font-family:var(--mono);font-size:11.5px;padding:3px 9px;border-radius:6px;background:#fff;border:1px solid var(--line2);color:var(--dim);white-space:nowrap}
+.vchip b{color:var(--ink);font-weight:700}
+.vchip.hi{background:var(--amber-bg);border-color:var(--amber-line);color:#7a4e0c}
+.vchip.hi b{color:#7a4e0c}
+footer{flex:0 0 auto;padding:10px 20px;border-top:1px solid var(--line);background:var(--card);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+footer button{appearance:none;font-family:var(--sans);font-size:13px;padding:7px 15px;border-radius:8px;border:1px solid var(--line2);background:#fff;color:var(--ink);cursor:pointer;transition:.15s}
+footer button:hover:not(:disabled){border-color:var(--faint);background:#faf8f1}
+footer button:disabled{opacity:.4;cursor:not-allowed}
+footer button.primary{background:var(--amber);border-color:var(--amber);color:#fff;font-weight:600;min-width:82px}
+footer button.primary:hover:not(:disabled){background:#a96c0f;border-color:#a96c0f}
+footer select{font-family:var(--sans);font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid var(--line2);background:#fff;color:var(--ink);cursor:pointer}
+#stepInfo{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim)}
+#kbd{margin-left:14px;font-size:11px;color:var(--faint)}
+@media (max-width:860px){main{grid-template-columns:1fr;grid-template-rows:38% 62%}.pane.code{border-right:none;border-bottom:1px solid var(--line)}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>搜索 <small>DFS 爬一条线，BFS 扩一圈波</small></h1>
+  <div class="tabs" id="tabs"></div>
+</header>
+
+<main>
+  <section class="pane code">
+    <div class="pane-hd"><span>源码</span><em id="codeTitle"></em></div>
+    <pre id="codeBody"></pre>
+  </section>
+  <section class="pane viz">
+    <div id="note"></div>
+    <div id="canvas"></div>
+    <div id="vars"></div>
+  </section>
+</main>
+
+<footer>
+  <button id="btnReset">重头开始</button>
+  <button id="btnPrev">上一步</button>
+  <button id="btnPlay" class="primary">播放</button>
+  <button id="btnNext">下一步</button>
+  <select id="speed">
+    <option value="1400">慢</option>
+    <option value="800" selected>中</option>
+    <option value="380">快</option>
+    <option value="150">极快</option>
+  </select>
+  <span id="stepInfo"></span>
+  <span id="kbd">← → 单步　空格 播放</span>
+</footer>
+
+<script>
+/* ==TRACE-BEGIN== */
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* =====================================================================
+   网格底座：DFS / BFS 共用
+   ===================================================================== */
+function svgGrid(opt) {
+  const {
+    grid, rows, cols, CELL = 46, GAP = 4, PAD = 22,
+    cellStyle, subText, extra, topPad = 0
+  } = opt;
+  const step = CELL + GAP;
+  const W = PAD * 2 + cols * step - GAP;
+  const H = PAD * 2 + rows * step - GAP + topPad + (extra ? 34 : 0);
+
+  let h = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" width="${W}" height="${H}" style="width:100%;height:100%;max-width:${Math.round(W * 1.6)}px" xmlns="http://www.w3.org/2000/svg" font-family="var(--sans)">`;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = PAD + c * step, y = PAD + topPad + r * step;
+      const st = cellStyle(r, c);
+      if (st.skip) continue;
+      h += `<rect x="${x}" y="${y}" width="${CELL}" height="${CELL}" rx="7"
+        fill="${st.fill}" stroke="${st.stroke}" stroke-width="${st.w || 1.4}"
+        ${st.dash ? `stroke-dasharray="${st.dash}"` : ''}/>`;
+      const v = grid[r][c];
+      const label = st.label != null ? st.label : v;
+      h += `<text x="${x + CELL / 2}" y="${y + (st.sub ? CELL / 2 - 2 : CELL / 2 + 5)}"
+        text-anchor="middle" font-size="${st.fs || 15}" font-weight="600"
+        font-family="var(--mono)" fill="${st.txt}">${esc(label)}</text>`;
+      if (st.sub) {
+        h += `<text x="${x + CELL / 2}" y="${y + CELL - 9}" text-anchor="middle"
+          font-size="10.5" font-family="var(--mono)" fill="${st.subColor || '#8b8779'}">${esc(st.sub)}</text>`;
+      }
+      // 方向提示：画在格子内侧四边，顺序与 DX/DY 一致（右 下 左 上）
+      if (st.dirs) {
+        const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+        const off = CELL / 2 - 7;
+        dirs.forEach(([dx, dy], i) => {
+          const cx0 = x + CELL / 2, cy0 = y + CELL / 2;
+          const tx = cx0 + dx * off, ty = cy0 + dy * off;
+          const hot = st.dirs === i + 1;
+          h += `<circle cx="${tx}" cy="${ty}" r="5.2" fill="${hot ? '#c07c14' : '#ffffff'}" stroke="${hot ? '#8a5608' : '#c0bbac'}" stroke-width="${hot ? 1.2 : 0.9}"/>`;
+          h += `<text x="${tx}" y="${ty + 3.2}" text-anchor="middle" font-size="8"
+            font-family="var(--mono)" fill="${hot ? '#fff' : '#a5a193'}" font-weight="700">${'→↓←↑'[i]}</text>`;
+        });
+      }
+    }
+  }
+
+  if (extra) h += extra(W, H - 8);
+  return h + '</svg>';
+}
+
+/* =====================================================================
+   场景 ①  DFS —— 岛屿数量
+   画法：一条蓝色的链在网格里爬，死路变灰并逐格退回。
+   ===================================================================== */
+const G1 = [
+  [1, 1, 0, 0],
+  [1, 1, 0, 0],
+  [0, 0, 1, 0],
+  [0, 0, 1, 1]
+];
+const R1 = 4, C1 = 4;
+const DX = [0, 1, 0, -1], DY = [1, 0, -1, 0];
+const DIRNAME = ['右', '下', '左', '上'];
+
+const CODE_DFS = `int dx[4] = {0, 1, 0, -1};
+int dy[4] = {1, 0, -1, 0};
+
+void dfs(int x, int y) {
+    if (x < 0 || x >= n || y < 0 || y >= m) return;
+    if (grid[x][y] != 1) return;
+    grid[x][y] = 0;                 // 淹掉，防止绕回来
+    for (int d = 0; d < 4; d++)
+        dfs(x + dx[d], y + dy[d]);
+}
+
+int ans = 0;
+for (int i = 0; i < n; i++)
+    for (int j = 0; j < m; j++)
+        if (grid[i][j] == 1) { ans++; dfs(i, j); }`.split('\n');
+
+function* runDFS() {
+  const g = G1.map(r => [...r]);
+  const state = g.map(r => r.map(v => v === 0 ? 'water' : 'land'));
+  // water | land | onpath | dead
+  const stack = [];
+  let ans = 0;
+
+  const snap = (line, note, extra = {}) => ({
+    line, note,
+    grid: g.map(r => [...r]),
+    state: state.map(r => [...r]),
+    stack: [...stack],
+    ansCount: ans,
+    ...extra
+  });
+
+  function* dfs(x, y) {
+    stack.push(`(${x},${y})`);
+    yield snap(5, `进入 <code>dfs(${x},${y})</code>，检查边界。栈深 ${stack.length}。`);
+
+    if (x < 0 || x >= R1 || y < 0 || y >= C1) {
+      stack.pop();
+      yield snap(5, `<code>(${x},${y})</code> 越界了，立刻返回。这一步什么也没做。`);
+      return;
+    }
+
+    if (g[x][y] !== 1) {
+      stack.pop();
+      const why = g[x][y] === 0 ? '已经是水' : '已经访问过';
+      yield snap(6, `<code>(${x},${y})</code> ${why}（值 = ${g[x][y]}），不是陆地，返回。`);
+      return;
+    }
+
+    g[x][y] = 0;
+    state[x][y] = 'onpath';
+    yield snap(7, `<code>(${x},${y})</code> 是陆地，把它淹掉（置 0），标成"在路径上"。`);
+
+    for (let d = 0; d < 4; d++) {
+      const nx = x + DX[d], ny = y + DY[d];
+      yield snap(8, `第 ${d + 1} 个方向：往<b>${DIRNAME[d]}</b>走，目标是 <code>(${nx},${ny})</code>。`,
+        { cur: [x, y], dir: d + 1 });
+      yield* dfs(nx, ny);
+    }
+
+    state[x][y] = 'dead';
+    stack.pop();
+    yield snap(9, `四个方向都试完了，<code>(${x},${y})</code> 退回上一层，格子变灰 —— 它走通了，但不再参与。`);
+  }
+
+  for (let i = 0; i < R1; i++) {
+    for (let j = 0; j < C1; j++) {
+      if (g[i][j] === 1) {
+        ans++;
+        yield snap(15, `发现新岛屿！第 ${i} 行第 ${j} 列还是 1，<code>ans = ${ans}</code>，从这里开始淹。`);
+        yield* dfs(i, j);
+      }
+    }
+  }
+  yield snap(15, `扫完整个网格，一共 <b>${ans}</b> 座岛。注意那些灰格子 —— 它们已经被淹成 0，不会再被算成新岛。`);
+}
+
+function renderDFS(s) {
+  // 没有显式 cur 时，用栈顶当"当前格子"，这样任何一步都能看出站在哪
+  let cur = s.cur;
+  if (!cur && s.stack.length) {
+    const m = s.stack[s.stack.length - 1].match(/\d+/g);
+    if (m) cur = [+m[0], +m[1]];
+  }
+  const dir = s.dir;
+  const html = svgGrid({
+    grid: s.grid, rows: R1, cols: C1,
+    cellStyle: (r, c) => {
+      const st = s.state[r][c];
+      const isCur = cur && cur[0] === r && cur[1] === c;
+      if (st === 'onpath') {
+        const o = { fill: '#2f6fd0', stroke: '#1d4f96', w: isCur ? 2.8 : 2, txt: '#ffffff', fs: 15, label: 0 };
+        if (isCur) { o.dirs = dir || 0; }
+        return o;
+      }
+      if (st === 'dead') return { fill: '#efeee7', stroke: '#c0bbac', txt: '#a5a193', label: 0 };
+      if (st === 'water') return { fill: '#f6f4ec', stroke: '#e6e1d3', txt: '#d5d0c2', label: '·' };
+      // land（还没被淹）
+      const o = { fill: '#ffffff', stroke: '#cbc7b9', w: 1.6, txt: '#2c2b26', label: 1 };
+      if (isCur) { o.stroke = '#c07c14'; o.w = 2.8; o.dirs = dir || 0; }
+      return o;
+    },
+    extra: (W, H) => {
+      // 底部：递归栈
+      const items = s.stack.slice(-7);
+      let x = 22, out = '';
+      out += `<text x="22" y="${H - 26}" font-size="10.5" fill="#8b8779">递归栈（栈底 → 栈顶）</text>`;
+      items.forEach((t, i) => {
+        const isTop = i === items.length - 1;
+        const w = 58;
+        out += `<rect x="${x}" y="${H - 18}" width="${w}" height="20" rx="6"
+          fill="${isTop ? '#2f6fd0' : '#eaf1fb'}" stroke="${isTop ? '#1d4f96' : '#b9cde8'}" stroke-width="1.2"/>`;
+        out += `<text x="${x + w / 2}" y="${H - 4}" text-anchor="middle" font-size="10.5"
+          font-family="var(--mono)" fill="${isTop ? '#fff' : '#1d4f96'}" font-weight="600">${esc(t)}</text>`;
+        x += w + 5;
+      });
+      if (s.stack.length > 7) out += `<text x="${x}" y="${H - 4}" font-size="10" fill="#a5a193">+${s.stack.length - 7}</text>`;
+      return out;
+    }
+  });
+  return html;
+}
+
+const varsDFS = s => [
+  ['当前', s.cur ? '(' + s.cur[0] + ',' + s.cur[1] + ')' : '—', true],
+  ['方向', s.dir ? DIRNAME[s.dir - 1] : '—', true],
+  ['栈深', s.stack.length, false],
+  ['ans', s.ansCount != null ? s.ansCount : '—', false]
+];
+
+/* =====================================================================
+   场景 ②  BFS —— 迷宫最短路
+   画法：从起点一圈一圈扩散，同一层同色。这是和 DFS 最本质的区别。
+   ===================================================================== */
+const G2 = [
+  [0, 0, 0, 0, 0],
+  [0, 1, 1, 0, 0],
+  [0, 0, 0, 0, 0],
+  [0, 1, 0, 1, 0],
+  [0, 0, 0, 0, 0]
+];
+const R2 = 5, C2 = 5;
+
+const CODE_BFS = `queue<pair<int,int>> q;
+dist[0][0] = 0;
+q.push({0, 0});
+
+while (!q.empty()) {
+    auto [x, y] = q.front(); q.pop();
+    for (int d = 0; d < 4; d++) {
+        int nx = x + dx[d], ny = y + dy[d];
+        if (越界 || 是墙 || dist[nx][ny] != -1) continue;
+        dist[nx][ny] = dist[x][y] + 1;
+        q.push({nx, ny});
+    }
+}`.split('\n');
+
+function* runBFS() {
+  const dist = G2.map(r => r.map(() => -1));
+  const queue = [];
+  const visitOrder = [];
+
+  const snap = (line, note, extra = {}) => ({
+    line, note,
+    dist: dist.map(r => [...r]),
+    queue: queue.map(p => p.slice()),
+    order: [...visitOrder],
+    ...extra
+  });
+
+  dist[0][0] = 0;
+  queue.push([0, 0]);
+  visitOrder.push([0, 0]);
+  yield snap(2, `起点 <code>(0,0)</code> 距离设为 0，入队。队列长度 ${queue.length}。`);
+
+  let layer = 0;
+  while (queue.length) {
+    const [x, y] = queue.shift();
+    layer = dist[x][y];
+    yield snap(6, `出队 <code>(${x},${y})</code>，它的 dist = ${layer}。现在要把它周围没去过的地方都标成 ${layer + 1}。`);
+
+    for (let d = 0; d < 4; d++) {
+      const nx = x + DX[d], ny = y + DY[d];
+      if (nx < 0 || nx >= R2 || ny < 0 || ny >= C2) continue;
+      if (G2[nx][ny] === 1) {
+        yield snap(9, `往${DIRNAME[d]}是 <code>(${nx},${ny})</code>，那是墙，跳过。`, { cur: [x, y] });
+        continue;
+      }
+      if (dist[nx][ny] !== -1) {
+        yield snap(9, `往${DIRNAME[d]}是 <code>(${nx},${ny})</code>，dist 已经是 ${dist[nx][ny]}，去过，跳过。`, { cur: [x, y] });
+        continue;
+      }
+      dist[nx][ny] = layer + 1;
+      queue.push([nx, ny]);
+      visitOrder.push([nx, ny]);
+      yield snap(10, `往${DIRNAME[d]}发现新格子 <code>(${nx},${ny})</code>，标 <code>dist = ${layer + 1}</code> 并入队。队列现在 ${queue.length} 个。`, { cur: [x, y], fresh: [nx, ny] });
+    }
+  }
+  yield snap(5, `队列空了，全部可达格子都标好了。<code>dist[4][4] = ${dist[4][4]}</code>，这就是最短步数 —— BFS 第一次踩到它时就是最短的。`);
+}
+
+function renderBFS(s) {
+  const maxD = Math.max(...s.dist.flat());
+  // 按距离分层上色：同层同色，色相从蓝往青绿递进
+  const layerColor = d => {
+    if (d < 0) return null;
+    const t = maxD ? d / maxD : 0;
+    const hue = 212 - t * 100;          // 212(蓝) → 112(绿)
+    return `hsl(${hue}, 62%, ${88 - t * 12}%)`;
+  };
+  const layerStroke = d => {
+    const t = maxD ? d / maxD : 0;
+    const hue = 212 - t * 100;
+    return `hsl(${hue}, 46%, ${58 - t * 6}%)`;
+  };
+
+  return svgGrid({
+    grid: s.dist.map(r => r.map(v => v < 0 ? '·' : v)),
+    rows: R2, cols: C2, CELL: 50,
+    cellStyle: (r, c) => {
+      if (G2[r][c] === 1) return { fill: '#e9e5da', stroke: '#cfcabc', txt: '#b4b2a9', label: '墙', fs: 10 };
+      const d = s.dist[r][c];
+      const isFresh = s.fresh && s.fresh[0] === r && s.fresh[1] === c;
+      const isCur = s.cur && s.cur[0] === r && s.cur[1] === c;
+      if (d < 0) return { fill: '#ffffff', stroke: '#ddd8ca', txt: '#c8c3b4', label: '·' };
+      const o = {
+        fill: layerColor(d), stroke: layerStroke(d), w: isFresh ? 2.6 : 1.4,
+        txt: '#1f3a2e', label: d, sub: 'd=' + d, fs: 15, subColor: '#4a5f52'
+      };
+      if (isCur) { o.stroke = '#c07c14'; o.w = 2.6; }
+      return o;
+    },
+    extra: (W, H) => {
+      // 队列
+      let x = 22, out = '';
+      out += `<text x="22" y="${H - 26}" font-size="10.5" fill="#8b8779">队列（头 → 尾），共 ${s.queue.length} 个</text>`;
+      s.queue.slice(0, 8).forEach((p, i) => {
+        const w = 52;
+        const d = s.dist[p[0]][p[1]];
+        out += `<rect x="${x}" y="${H - 18}" width="${w}" height="20" rx="6"
+          fill="${layerColor(d)}" stroke="${layerStroke(d)}" stroke-width="1.2"/>`;
+        out += `<text x="${x + w / 2}" y="${H - 4}" text-anchor="middle" font-size="10.5"
+          font-family="var(--mono)" fill="#1f3a2e" font-weight="600">(${p[0]},${p[1]})</text>`;
+        x += w + 4;
+      });
+      if (s.queue.length > 8) out += `<text x="${x}" y="${H - 4}" font-size="10" fill="#a5a193">+${s.queue.length - 8}</text>`;
+      if (!s.queue.length) out += `<text x="22" y="${H - 4}" font-size="10.5" fill="#a5a193">（空）</text>`;
+      return out;
+    }
+  });
+}
+
+const varsBFS = s => {
+  const filled = s.dist.flat().filter((v, i) => v >= 0 && G2[Math.floor(i / C2)][i % C2] !== 1).length;
+  return [
+    ['出队的', s.cur ? '(' + s.cur[0] + ',' + s.cur[1] + ')' : '—', true],
+    ['队列长度', s.queue.length, true],
+    ['已标 dist', filled, false],
+    ['dist[4][4]', s.dist[4][4] >= 0 ? s.dist[4][4] : '未到', false]
+  ];
+};
+
+/* =====================================================================
+   场景 ③  拓扑排序 —— 入度归零的那一刻点亮
+   ===================================================================== */
+const GN = ['A', 'B', 'C', 'D', 'E', 'F'];
+const GPOS = { A: [60, 40], B: [60, 150], C: [200, 95], D: [340, 40], E: [340, 150], F: [480, 95] };
+const GEDGES = [['A', 'C'], ['B', 'C'], ['C', 'D'], ['C', 'E'], ['D', 'F'], ['E', 'F']];
+const INDEG0 = { A: 0, B: 0, C: 2, D: 1, E: 1, F: 2 };
+
+const CODE_TOPO = `for (int i = 0; i < n; i++)
+    if (indeg[i] == 0) q.push(i);
+
+while (!q.empty()) {
+    int u = q.front(); q.pop();
+    order.push_back(u);
+    for (int v : g[u]) {
+        if (--indeg[v] == 0)
+            q.push(v);
+    }
+}`.split('\n');
+
+function* runTopo() {
+  const indeg = { ...INDEG0 };
+  const queue = [];
+  const order = [];
+  const g = {};
+  GN.forEach(u => g[u] = []);
+  GEDGES.forEach(([u, v]) => g[u].push(v));
+
+  const snap = (line, note, extra = {}) => ({
+    line, note, indeg: { ...indeg }, queue: [...queue], order: [...order], ...extra
+  });
+
+  GN.filter(u => indeg[u] === 0).forEach(u => queue.push(u));
+  yield snap(2, `先把入度为 0 的节点入队：${[...queue].join('、')}。它们没有前置任务，随时可以开始。`);
+
+  while (queue.length) {
+    const u = queue.shift();
+    order.push(u);
+    yield snap(5, `出队 <code>${u}</code>，加入拓扑序，当前序列 <code>${order.join(' → ')}</code>。`);
+
+    for (const v of g[u]) {
+      indeg[v]--;
+      const zero = indeg[v] === 0;
+      yield snap(8, `${u} → ${v} 这条边处理完了，<code>${v}</code> 的入度从 ${indeg[v] + 1} 减到 <b>${indeg[v]}</b>${zero ? '，<b>归零，可以入队！</b>' : '，还得等。'}`,
+        { active: u, touched: v, zero });
+      if (zero) {
+        queue.push(v);
+        yield snap(9, `<code>${v}</code> 入队。队列现在 ${queue.join('、') || '空'}。`, { active: u, touched: v, zero: true });
+      }
+    }
+  }
+
+  yield snap(8, `队列空了，输出序列 <code>${order.join(' → ')}</code>，共 ${order.length} 个 —— 等于节点总数 ${GN.length}，说明这张图<b>没有环</b>。`);
+}
+
+function renderTopo(s) {
+  const W = 560, H = 244;
+  let h = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" width="${W}" height="${H}" style="width:100%;height:100%;max-width:${Math.round(W * 1.6)}px" xmlns="http://www.w3.org/2000/svg" font-family="var(--sans)">`;
+  h += `<defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M1 1 L9 5 L1 9" fill="none" stroke="#b9b5a6" stroke-width="1.6" stroke-linecap="round"/>
+    </marker>
+    <marker id="arHot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M1 1 L9 5 L1 9" fill="none" stroke="#c07c14" stroke-width="2" stroke-linecap="round"/>
+    </marker>
+  </defs>`;
+
+  // 边
+  GEDGES.forEach(([u, v]) => {
+    const [x1, y1] = GPOS[u], [x2, y2] = GPOS[v];
+    const hot = s.active === u && s.touched === v;
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+    const ux = dx / len, uy = dy / len;
+    const sx = x1 + ux * 34, sy = y1 + uy * 24;
+    const ex = x2 - ux * 34, ey = y2 - uy * 24;
+    h += `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${hot ? '#c07c14' : '#c9c4b4'}"
+      stroke-width="${hot ? 2.6 : 1.5}" marker-end="url(#${hot ? 'arHot' : 'ar'})"/>`;
+  });
+
+  // 节点
+  GN.forEach(u => {
+    const [x, y] = GPOS[u];
+    const d = s.indeg[u];
+    const isOrder = s.order.includes(u);
+    const isActive = s.active === u;
+    const isZeroNow = s.zero && s.touched === u;
+    let fill = '#ffffff', stroke = '#cbc7b9', txt = '#2c2b26', w = 1.6;
+    if (isActive) { fill = '#fdf3e0'; stroke = '#c07c14'; w = 2.6; txt = '#7a4e0c'; }
+    else if (isZeroNow) { fill = '#e8f5ee'; stroke = '#17804a'; w = 2.6; txt = '#0d5c34'; }
+    else if (isOrder) { fill = '#eaf1fb'; stroke = '#2f6fd0'; txt = '#1d4f96'; }
+
+    h += `<rect x="${x - 30}" y="${y - 24}" width="60" height="48" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="${w}"/>`;
+    h += `<text x="${x}" y="${y - 2}" text-anchor="middle" font-size="17" font-weight="700" font-family="var(--mono)" fill="${txt}">${u}</text>`;
+    h += `<text x="${x}" y="${y + 15}" text-anchor="middle" font-size="10.5" font-family="var(--mono)"
+      fill="${d === 0 ? '#17804a' : '#8b8779'}" font-weight="${d === 0 ? 700 : 400}">入度 ${d}</text>`;
+  });
+
+  // 底部队列 + 输出序列
+  h += `<text x="20" y="${H - 38}" font-size="10.5" fill="#8b8779">队列</text>`;
+  if (s.queue.length) {
+    let x = 56;
+    s.queue.forEach(u => {
+      h += `<rect x="${x}" y="${H - 50}" width="42" height="20" rx="6" fill="#eaf1fb" stroke="#b9cde8" stroke-width="1.2"/>`;
+      h += `<text x="${x + 21}" y="${H - 36}" text-anchor="middle" font-size="11" font-family="var(--mono)" fill="#1d4f96" font-weight="600">${u}</text>`;
+      x += 47;
+    });
+  } else {
+    h += `<text x="56" y="${H - 36}" font-size="10.5" fill="#a5a193">（空）</text>`;
+  }
+
+  h += `<text x="20" y="${H - 12}" font-size="10.5" fill="#8b8779">输出</text>`;
+  h += `<text x="56" y="${H - 10}" font-size="13" font-family="var(--mono)" fill="#2c2b26" font-weight="600">${s.order.join(' → ')}</text>`;
+
+  return h + '</svg>';
+}
+
+const varsTopo = s => [
+  ['出队的', s.active || '—', true],
+  ['刚减入度', s.touched || '—', true],
+  ['队列', s.queue.join('') || '空', false],
+  ['已输出', s.order.length + ' / ' + GN.length, false]
+];
+
+/* =====================================================================
+   注册
+   ===================================================================== */
+const SCENES = {
+  dfs: {
+    tab: '① DFS', sub: '一条线在爬', title: '岛屿数量',
+    code: CODE_DFS, gen: runDFS, render: renderDFS, vars: varsDFS
+  },
+  bfs: {
+    tab: '② BFS', sub: '一圈波在扩', title: '迷宫最短路',
+    code: CODE_BFS, gen: runBFS, render: renderBFS, vars: varsBFS
+  },
+  topo: {
+    tab: '③ 拓扑排序', sub: '入度归零', title: '课程安排',
+    code: CODE_TOPO, gen: runTopo, render: renderTopo, vars: varsTopo
+  }
+};
+
+const INPUT = G1;
+const CODE = CODE_DFS;
+const run = runDFS;
+const allRuns = { dfs: runDFS, bfs: runBFS, topo: runTopo };
+const allCodes = { dfs: CODE_DFS, bfs: CODE_BFS, topo: CODE_TOPO };
+const allScenes = SCENES;
+
+const expect = {
+  dfs: { path: 'ansCount', value: 2 },
+  bfs: { path: 'dist', value: [[0, 1, 2, 3, 4], [1, -1, -1, 4, 5], [2, 3, 4, 5, 6], [3, -1, 5, -1, 7], [4, 5, 6, 7, 8]] },
+  topo: steps => {
+    const last = steps[steps.length - 1];
+    if (last.order.length !== 6) return '拓扑序长度应为 6（有环了）';
+    // 校验顺序合法性：每条边 u→v 必须 u 在 v 之前
+    const pos = {};
+    last.order.forEach((u, i) => pos[u] = i);
+    for (const [u, v] of GEDGES) if (pos[u] > pos[v]) return `边 ${u}→${v} 的顺序反了`;
+    return true;
+  }
+};
+/* ==TRACE-END== */
+
+const $ = id => document.getElementById(id);
+
+let cur = 'dfs', steps = [], idx = 0, timer = null, playing = false;
+
+function paintTabs() {
+  $('tabs').innerHTML = Object.entries(SCENES).map(([k, sc]) =>
+    `<button data-k="${k}" class="${k === cur ? 'on' : ''}"><b>${sc.tab.slice(0, 1)}</b>${sc.tab.slice(1)}<span style="opacity:.55;font-size:11px;margin-left:6px">${sc.sub}</span></button>`
+  ).join('');
+  $('tabs').querySelectorAll('button').forEach(b => {
+    b.onclick = () => { stop(); cur = b.dataset.k; build(); paintTabs(); };
+  });
+}
+
+function renderCode(lines, onLine) {
+  const box = $('codeBody');
+  box.innerHTML = lines.map((t, i) =>
+    `<div class="cl${i + 1 === onLine ? ' on' : ''}"><span class="ln">${i + 1}</span><span class="ct">${esc(t)}</span></div>`
+  ).join('');
+  const el = box.querySelector('.cl.on');
+  if (el) {
+    const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+    if (r.top < b.top || r.bottom > b.bottom) el.scrollIntoView({ block: 'center' });
+  }
+}
+
+function draw() {
+  const sc = SCENES[cur];
+  const s = steps[idx];
+  renderCode(sc.code, s.line);
+  $('note').innerHTML = s.note;
+  $('canvas').innerHTML = sc.render(s);
+  $('vars').innerHTML = sc.vars(s).map(([k, v, hi]) =>
+    `<span class="vchip${hi ? ' hi' : ''}">${k} <b>${esc(v)}</b></span>`).join('');
+  $('stepInfo').textContent = `第 ${idx + 1} / ${steps.length} 步`;
+  $('btnPrev').disabled = idx === 0;
+  $('btnNext').disabled = idx === steps.length - 1;
+  $('codeTitle').textContent = sc.title;
+}
+
+function build() {
+  steps = [...SCENES[cur].gen()];
+  idx = 0;
+  draw();
+}
+
+function next() { if (idx < steps.length - 1) { idx++; draw(); } else stop(); }
+function prev() { if (idx > 0) { idx--; draw(); } }
+function stop() { playing = false; clearInterval(timer); timer = null; $('btnPlay').textContent = '播放'; }
+function play() {
+  if (playing) return stop();
+  if (idx >= steps.length - 1) idx = 0;
+  playing = true; $('btnPlay').textContent = '暂停';
+  timer = setInterval(next, +$('speed').value);
+  draw();
+}
+
+$('btnPlay').onclick = play;
+$('btnNext').onclick = () => { stop(); next(); };
+$('btnPrev').onclick = () => { stop(); prev(); };
+$('btnReset').onclick = () => { stop(); build(); };
+$('speed').onchange = () => { if (playing) { clearInterval(timer); timer = setInterval(next, +$('speed').value); } };
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') { e.preventDefault(); stop(); next(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); stop(); prev(); }
+  else if (e.key === ' ') { e.preventDefault(); play(); }
+});
+
+(function init() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  const sc = p.get('scene');
+  if (sc && SCENES[sc]) cur = sc;
+  paintTabs();
+  build();
+  const st = p.get('step');
+  if (st != null && st !== '') {
+    idx = st === 'last' ? steps.length - 1 : Math.max(0, Math.min(+st || 0, steps.length - 1));
+    draw();
+  }
+})();
+</script>
+</body>
+</html>
