@@ -13,7 +13,9 @@
     3. 数据面板的 HTML 结构（.block 那几段）
     4. renderArray / renderStack / renderVars 三个渲染函数
 
-  不要动：CSS 变量、控制按钮的 id、播放控制那段 JS。
+  不要动：CSS 变量、控制按钮的 id、播放控制那段 JS、
+          代码行构造（三列）、alignCommentColumn / updateCodeMode、中缝拖动那段。
+          这些是排版保证，删了就会出现「注释被裁」「变量要横跳去找」。
   ============================================================
 -->
 <title>单调栈 · 逐行演示</title>
@@ -33,6 +35,8 @@
     --green-bg: #e8f5ee;
     --red: #c0392b;
     --red-bg: #fbecea;
+    --code-w: 600px;          /* 代码区宽度，可拖动；改这里换默认比例 */
+    --code-col-w: 236px;      /* 代码列宽度，由 JS 量出来，别手改 */
     --mono: ui-monospace, "Cascadia Code", Consolas, "SF Mono", monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -75,9 +79,20 @@
 
   main {
     display: grid;
-    grid-template-columns: minmax(0, 500px) minmax(0, 1fr);
-    gap: 12px; padding: 0 14px 14px;
+    grid-template-columns: var(--code-w) 15px minmax(0, 1fr);
+    gap: 0; padding: 0 14px 12px;
     overflow: hidden; min-height: 0; flex: 1;
+  }
+  /* 中缝：可拖动，用来分配左右宽度 */
+  body.dragging-col { user-select: none; cursor: col-resize; }
+  .resizer { position: relative; cursor: col-resize; touch-action: none; background: transparent; }
+  .resizer::before {
+    content: ''; position: absolute; left: 50%; top: 8px; bottom: 8px;
+    width: 2px; margin-left: -1px; border-radius: 1px;
+    background: #d5d2c9; transition: background .15s, width .15s, margin-left .15s;
+  }
+  .resizer:hover::before, .resizer.dragging::before {
+    background: #dda43a; width: 3px; margin-left: -1.5px;
   }
   .panel {
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
@@ -90,21 +105,31 @@
   }
   .phead b { font-weight: 500; color: var(--txt); font-size: 12.5px; }
 
-  /* 左：代码 */
+  /* 左：代码 —— 三列：行号 / 代码 / 注释 */
   .code-scroll { overflow: auto; padding: 6px 0 14px; flex: 1; scroll-behavior: smooth; }
   .cl {
-    display: flex; font-family: var(--mono); font-size: 12px; line-height: 21px;
-    padding: 0 12px; white-space: pre;
+    display: grid;
+    grid-template-columns: 22px var(--code-col-w) minmax(118px, 1fr);
+    column-gap: 10px; align-items: start;
+    font-family: var(--mono); font-size: 12px; line-height: 21px;
+    padding: 0 10px 0 8px;
     border-left: 3px solid transparent; color: #43413b;
     transition: background .12s;
   }
-  .cl .ln {
-    width: 22px; flex-shrink: 0; text-align: right; margin-right: 10px;
-    color: #c3c0b7; user-select: none;
-  }
+  .cl .ln { text-align: right; color: #c3c0b7; user-select: none; }
+  .cwrap { display: contents; }                                  /* 对齐模式：让 cd / cm 各自成为一列 */
+  .cl .cd { white-space: pre; }                                  /* 代码永不折行 */
+  .cl .cm { white-space: pre-wrap; overflow-wrap: break-word; color: #928f86; }  /* 注释自己折行 */
+
+  /* 降级模式：代码列太长、注释列被挤到没地方时，注释退回行内跟随，不折成碎条 */
+  .cl.flow { grid-template-columns: 22px minmax(0, 1fr); }
+  .cl.flow .cwrap { display: block; min-width: 0; }
+  .cl.flow .cd { white-space: pre-wrap; overflow-wrap: break-word; }
+  .cl.flow .cm { display: inline; margin-left: 1ch; }
   .cl.active { background: var(--amber-bg); border-left-color: #dda43a; }
   .cl.active .ln { color: var(--amber); font-weight: 600; }
   .cl.active .cd { color: #6b4a10; }
+  .cl.active .cm { color: #a8863f; }
 
   /* 右：数据 */
   .data-scroll { overflow-y: auto; padding: 12px 14px 20px; flex: 1; }
@@ -169,20 +194,24 @@
   .stack-meta { font-size: 11.5px; color: var(--txt2); margin-top: 8px; }
   .stack-meta b { color: var(--txt); font-weight: 500; }
 
-  .vars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  /* 变量表：竖排单列，紧凑胶囊，名字和值挨着（不要 space-between） */
+  .vars { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
   .v {
     background: #faf9f6; border: 1px solid var(--line); border-radius: 8px;
-    padding: 6px 9px; display: flex; align-items: center;
-    justify-content: space-between; gap: 8px;
+    padding: 4px 12px 4px 9px;
+    display: inline-grid; grid-template-columns: 40px auto; column-gap: 8px;
+    align-items: baseline; min-width: 132px;
   }
   .v .k { font-family: var(--mono); font-size: 11.5px; color: var(--txt2); }
   .v .val {
-    font-family: var(--mono); font-size: 14px; font-weight: 600;
+    font-family: var(--mono); font-size: 13.5px; font-weight: 600;
     color: var(--txt3); transition: color .15s; white-space: nowrap;
   }
   .v.set .val { color: var(--txt); }
   .v.neg .val { color: var(--red); }
   .v.pos .val { color: var(--green); }
+  .v.hot { border-color: #e2b862; background: #fffdf8; }
+  .v.hot .val { color: var(--amber); }
 
   .ansbox {
     display: flex; align-items: baseline; gap: 10px;
@@ -206,6 +235,7 @@
 
   @media (max-width: 960px) {
     main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+    .resizer { display: none; }
   }
 </style>
 </head>
@@ -234,6 +264,9 @@
       <div class="code-scroll" id="codeScroll"></div>
       <div class="progress"><div class="bar" id="bar"></div></div>
     </section>
+
+    <!-- ↓ 拖动它换左右宽度，不要删 ↓ -->
+    <div class="resizer" id="resizer" title="拖动调整左右宽度"></div>
 
     <section class="panel">
       <div class="phead"><b>数据</b><span id="phaseInfo">准备中</span></div>
@@ -433,22 +466,59 @@ let timer = null;
 let playing = false;
 let speed = 560;
 
-// 构造代码行
+// 构造代码行：代码和注释拆成两列，代码不折行、注释自己折行 → 注释永远不会被裁
 const codeScroll = document.getElementById('codeScroll');
 CODE.forEach((line, i) => {
   const div = document.createElement('div');
   div.className = 'cl';
   div.dataset.line = i + 1;
+
   const ln = document.createElement('span');
   ln.className = 'ln';
   ln.textContent = i + 1;
+
+  const cut = line.indexOf('//');
+  const codeText = (cut >= 0 ? line.slice(0, cut) : line).replace(/\s+$/, '');
+  const cmtText = cut >= 0 ? line.slice(cut) : '';
+
   const cd = document.createElement('span');
   cd.className = 'cd';
-  cd.textContent = line.length ? line : ' ';
+  cd.textContent = codeText.length ? codeText : '\u00a0';
+
+  const cm = document.createElement('span');
+  cm.className = 'cm';
+  cm.textContent = cmtText;
+
+  const wrap = document.createElement('span');
+  wrap.className = 'cwrap';
+  wrap.appendChild(cd);
+  wrap.appendChild(cm);
+
   div.appendChild(ln);
-  div.appendChild(cd);
+  div.appendChild(wrap);
   codeScroll.appendChild(div);
 });
+
+// 量出最长的一行代码，让所有行的注释起点严格对齐
+// 必须用 scrollWidth：getBoundingClientRect 量到的是被列宽压扁后的宽度
+(function alignCommentColumn() {
+  let maxW = 0;
+  document.querySelectorAll('.cl .cd').forEach(el => {
+    if (el.scrollWidth > maxW) maxW = el.scrollWidth;
+  });
+  if (maxW > 0) {
+    document.documentElement.style.setProperty('--code-col-w', Math.ceil(maxW + 2) + 'px');
+  }
+})();
+
+// 代码列 + 注释列放不下时，切到行内模式，别让注释被挤成竖条
+// 阈值 180：注释列还剩这么宽就先保持对齐（整齐比松散好看），再窄就退回行内
+function updateCodeMode() {
+  const avail = codeScroll.clientWidth - 22 - 20 - 18;
+  const colW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--code-col-w')) || 236;
+  const flow = avail > 0 && colW + 180 > avail;
+  document.querySelectorAll('.cl').forEach(el => el.classList.toggle('flow', flow));
+}
 const codeEls = [...document.querySelectorAll('.cl')];
 
 // 变量表要显示哪些键，固定不变
@@ -602,7 +672,67 @@ document.addEventListener('keydown', (e) => {
 const hm = location.hash.match(/step=(\d+)/);
 if (hm) idx = Math.min(Number(hm[1]), steps.length - 1);
 
+/* ---------- 中缝拖动：分配左右宽度 ---------- */
+const mainEl = document.querySelector('main');
+const resizerEl = document.getElementById('resizer');
+const codePane = document.querySelector('main > .panel');
+let draggingCol = false;
+
+function readVarPx(name, fallback) {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return isNaN(v) ? fallback : v;
+}
+function clampW(w) {
+  const total = mainEl.clientWidth || 1200;
+  // 左边最小宽度 = 行号 22 + 代码列 + 列间距 20 + 注释列约 110 + 内边距 18
+  // 保证拖到最窄时注释仍留一席之地，不会整块被裁掉
+  const min = readVarPx('--code-col-w', 236) + 170;
+  const max = Math.max(min + 60, total - 28 - 15 - 400);
+  return Math.min(Math.max(w, min), max);
+}
+function applyW(w) {
+  document.documentElement.style.setProperty('--code-w', clampW(w) + 'px');
+  requestAnimationFrame(updateCodeMode);   // 宽度变了，重新判定「对齐 / 行内」
+}
+
+resizerEl.addEventListener('mousedown', (e) => {
+  draggingCol = true;
+  resizerEl.classList.add('dragging');
+  document.body.classList.add('dragging-col');
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!draggingCol) return;
+  const rect = mainEl.getBoundingClientRect();
+  applyW(e.clientX - rect.left - 14);
+});
+window.addEventListener('mouseup', () => {
+  if (!draggingCol) return;
+  draggingCol = false;
+  resizerEl.classList.remove('dragging');
+  document.body.classList.remove('dragging-col');
+});
+window.addEventListener('resize', () => {
+  // 用实测宽度，别读 --code-w：它可能是百分比
+  applyW(codePane.getBoundingClientRect().width);
+});
+
+/* ---------- Shift + 滚轮：代码区横向滚动 ---------- */
+const codeScrollEl = document.getElementById('codeScroll');
+codeScrollEl.addEventListener('wheel', (e) => {
+  if (!e.shiftKey) return;
+  // 没有横向溢出就交还给浏览器正常竖滚
+  if (codeScrollEl.scrollWidth <= codeScrollEl.clientWidth + 1) return;
+  e.preventDefault();
+  codeScrollEl.scrollLeft += (e.deltaY || e.deltaX);
+}, { passive: false });
+
+// 深链接也能带上代码区宽度：#step=30&w=700
+const wm = location.hash.match(/\bw=(\d+)/);
+if (wm) applyW(Number(wm[1]));
+
 render();
+requestAnimationFrame(updateCodeMode);
 </script>
 </body>
 </html>

@@ -14,6 +14,8 @@
   --red:#c0392b; --red-bg:#fbeeec;
   --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --code-w:46%;          /* 代码区宽度，可拖动；改这里换默认比例 */
+  --code-col-w:300px;    /* 代码列宽度，由 JS 量出来，别手改 */
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -52,9 +54,18 @@ h1 small{font-size:12px;font-weight:400;color:var(--dim)}
 
 /* ---------- 主区 ---------- */
 main{
-  flex:1;display:grid;grid-template-columns:minmax(320px,40%) 1fr;
+  flex:1;display:grid;grid-template-columns:var(--code-w) 14px minmax(0,1fr);
   overflow:hidden;min-height:0;
 }
+/* 中缝：可拖动，用来分配左右宽度 */
+body.dragging-col{user-select:none;cursor:col-resize}
+.resizer{position:relative;cursor:col-resize;touch-action:none;background:transparent}
+.resizer::before{
+  content:'';position:absolute;left:50%;top:8px;bottom:8px;
+  width:2px;margin-left:-1px;border-radius:1px;background:var(--line2);
+  transition:background .15s,width .15s,margin-left .15s;
+}
+.resizer:hover::before,.resizer.dragging::before{background:var(--amber);width:3px;margin-left:-1.5px}
 .pane{display:flex;flex-direction:column;min-width:0;min-height:0}
 .pane.code{border-right:1px solid var(--line)}
 .pane-hd{
@@ -70,15 +81,25 @@ main{
   flex:1;overflow:auto;margin:0;padding:10px 0;font-family:var(--mono);
   font-size:12.5px;line-height:1.85;background:var(--card);
 }
-.cl{display:flex;padding:0 14px 0 0;white-space:pre;transition:background .15s}
+/* 代码：三列 —— 行号 / 代码 / 注释 */
+.cl{display:grid;grid-template-columns:34px var(--code-col-w) minmax(110px,1fr);
+  column-gap:10px;align-items:start;padding:0 12px 0 0;transition:background .15s}
 .cl .ln{
-  flex:0 0 34px;text-align:right;padding-right:12px;color:#c8c3b4;
+  text-align:right;padding-right:12px;color:#c8c3b4;
   user-select:none;font-size:11.5px;
 }
-.cl .ct{flex:1;color:#3a3833}
+.cwrap{display:contents}
+.cl .cd{white-space:pre;color:#3a3833}                                  /* 代码不折行 */
+.cl .cm{white-space:pre-wrap;overflow-wrap:break-word;color:#9b9789}   /* 注释自己折行 */
+/* 降级：代码列太长、注释没地方时，注释退回行尾，不折成竖条 */
+.cl.flow{grid-template-columns:34px minmax(0,1fr)}
+.cl.flow .cwrap{display:block;min-width:0}
+.cl.flow .cd{white-space:pre-wrap;overflow-wrap:break-word}
+.cl.flow .cm{display:inline;margin-left:1ch}
 .cl.on{background:var(--amber-bg);box-shadow:inset 3px 0 0 var(--amber)}
 .cl.on .ln{color:var(--amber);font-weight:700}
-.cl.on .ct{color:#7a4e0c;font-weight:600}
+.cl.on .cd{color:#7a4e0c;font-weight:600}
+.cl.on .cm{color:#a8863f}
 
 /* 可视化 */
 #note{
@@ -129,6 +150,7 @@ footer select{
 @media (max-width:860px){
   main{grid-template-columns:1fr;grid-template-rows:38% 62%}
   .pane.code{border-right:none;border-bottom:1px solid var(--line)}
+  .resizer{display:none}
 }
 </style>
 </head>
@@ -144,6 +166,9 @@ footer select{
     <div class="pane-hd"><span>源码</span><em id="codeTitle"></em></div>
     <pre id="codeBody"></pre>
   </section>
+
+  <!-- ↓ 拖动它换左右宽度，不要删 ↓ -->
+  <div class="resizer" id="resizer" title="拖动调整左右宽度"></div>
   <section class="pane viz">
     <div id="note"></div>
     <div id="canvas"></div>
@@ -783,11 +808,36 @@ function paintTabs() {
   });
 }
 
+// 代码与注释拆两列：代码不折行、注释自己折行 → 注释永远不会被右边裁掉
+function alignCommentColumn(box) {
+  let maxW = 0;
+  box.querySelectorAll('.cl .cd').forEach(el => {
+    if (el.scrollWidth > maxW) maxW = el.scrollWidth;   // 必须 scrollWidth，不能用 getBoundingClientRect
+  });
+  if (maxW > 0) document.documentElement.style.setProperty('--code-col-w', Math.ceil(maxW + 2) + 'px');
+}
+// 注释列被挤得没地方时，退回行内跟随
+function updateCodeMode() {
+  const box = $('codeBody');
+  const avail = box.clientWidth - 34 - 20 - 18;
+  const colW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--code-col-w')) || 300;
+  const flow = avail > 0 && colW + 180 > avail;
+  box.querySelectorAll('.cl').forEach(el => el.classList.toggle('flow', flow));
+}
+
 function renderCode(lines, onLine) {
   const box = $('codeBody');
-  box.innerHTML = lines.map((t, i) =>
-    `<div class="cl${i + 1 === onLine ? ' on' : ''}"><span class="ln">${i + 1}</span><span class="ct">${esc(t)}</span></div>`
-  ).join('');
+  box.innerHTML = lines.map((t, i) => {
+    const cut = t.indexOf('//');
+    const codeText = (cut >= 0 ? t.slice(0, cut) : t).replace(/\s+$/, '');
+    const cmtText = cut >= 0 ? t.slice(cut) : '';
+    return `<div class="cl${i + 1 === onLine ? ' on' : ''}">` +
+      `<span class="ln">${i + 1}</span>` +
+      `<span class="cwrap"><span class="cd">${esc(codeText) || '&nbsp;'}</span>` +
+      `<span class="cm">${esc(cmtText)}</span></span></div>`;
+  }).join('');
+  alignCommentColumn(box);
+  updateCodeMode();
   const el = box.querySelector('.cl.on');
   if (el) {
     const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
@@ -854,6 +904,59 @@ document.addEventListener('keydown', e => {
     draw();
   }
 })();
+
+/* ---------- 中缝拖动：分配左右宽度 ---------- */
+const mainEl = document.querySelector('main');
+const resizerEl = document.getElementById('resizer');
+const codePane = document.querySelector('main > .pane.code');
+let draggingCol = false;
+
+function readVarPx(name, fallback) {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return isNaN(v) ? fallback : v;
+}
+function clampW(w) {
+  const total = mainEl.clientWidth || 1200;
+  const min = readVarPx('--code-col-w', 300) + 160;   // 保证注释列还留一席之地
+  const max = Math.max(min + 60, total - 28 - 14 - 380);
+  return Math.min(Math.max(w, min), max);
+}
+function applyW(w) {
+  document.documentElement.style.setProperty('--code-w', clampW(w) + 'px');
+  requestAnimationFrame(updateCodeMode);
+}
+resizerEl.addEventListener('mousedown', (e) => {
+  draggingCol = true;
+  resizerEl.classList.add('dragging');
+  document.body.classList.add('dragging-col');
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!draggingCol) return;
+  applyW(e.clientX - mainEl.getBoundingClientRect().left - 14);
+});
+window.addEventListener('mouseup', () => {
+  if (!draggingCol) return;
+  draggingCol = false;
+  resizerEl.classList.remove('dragging');
+  document.body.classList.remove('dragging-col');
+});
+window.addEventListener('resize', () => {
+  applyW(codePane.getBoundingClientRect().width);   // 用实测宽度，别读可能是百分比的变量
+});
+
+/* ---------- Shift + 滚轮：代码区横向滚动 ---------- */
+const codeBoxEl = document.getElementById('codeBody');
+codeBoxEl.addEventListener('wheel', (e) => {
+  if (!e.shiftKey) return;
+  if (codeBoxEl.scrollWidth <= codeBoxEl.clientWidth + 1) return;
+  e.preventDefault();
+  codeBoxEl.scrollLeft += (e.deltaY || e.deltaX);
+}, { passive: false });
+
+// 深链接带代码区宽度：#scene=linear&step=3&w=560
+const wm = location.hash.match(/\bw=(\d+)/);
+if (wm) applyW(Number(wm[1]));
 </script>
 </body>
 </html>

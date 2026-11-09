@@ -170,10 +170,170 @@ const ptrs = [
 
 正在填的那一格用琥珀，**已经确定但还没被用到**的用蓝，答案来源的格子用绿色虚线框——这样"这个值是从哪推出来的"能一眼看出来。
 
-## 七、面板排布
+## 七、页面布局：面板 / 中缝 / 代码区 / 变量区
 
-左边代码固定 `minmax(0, 500px)`，右边 `minmax(0, 1fr)`。窄屏（<960px）改成上下两行。
+这一节全是"学习者用眼睛找不到东西"的地方，四条规矩都是踩过坑改出来的。模板已内置，**复制骨架时照抄，别自己重写**。
 
-`body { overflow: hidden }` + 面板内部各自滚动。**不要让整页滚动**，否则高亮行滚动时整个页面跟着动，右边数据面板会跑出视野。
+`body { overflow: hidden }` + 面板内部各自滚动。**不要让整页滚动**，否则高亮行滚动时整个页面跟着动，右边数据面板会跑出视野。窄屏（<960px）改成上下两行，中缝隐藏。
 
-变量表固定三列，行数固定。`null` 显示成 `—` 占位，**不要删行**——行数一变，下面的内容会整体跳动。
+### 中缝：可拖动的宽度分配
+
+```css
+:root { --code-w: 600px; }              /* 代码区宽度，唯一入口 */
+
+main { display: grid; grid-template-columns: var(--code-w) 15px minmax(0, 1fr); gap: 0; }
+
+body.dragging-col { user-select: none; cursor: col-resize; }
+.resizer { position: relative; cursor: col-resize; touch-action: none; }
+.resizer::before {
+  content: ''; position: absolute; left: 50%; top: 8px; bottom: 8px;
+  width: 2px; margin-left: -1px; border-radius: 1px; background: #d5d2c9;
+  transition: background .15s, width .15s, margin-left .15s;
+}
+.resizer:hover::before, .resizer.dragging::before { background: #dda43a; width: 3px; margin-left: -1.5px; }
+@media (max-width: 960px) { .resizer { display: none; } }
+```
+
+```html
+<div class="resizer" id="resizer" title="拖动调整左右宽度"></div>
+```
+
+```js
+function readVarPx(name, fallback) {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return isNaN(v) ? fallback : v;
+}
+function clampW(w) {
+  const total = mainEl.clientWidth || 1200;
+  // 下限 = 代码列 + 170：保证拖到最窄时注释列还在，不会被整块裁掉
+  const min = readVarPx('--code-col-w', 236) + 170;
+  const max = Math.max(min + 60, total - 28 - 15 - 400);
+  return Math.min(Math.max(w, min), max);
+}
+function applyW(w) {
+  document.documentElement.style.setProperty('--code-w', clampW(w) + 'px');
+  requestAnimationFrame(updateCodeMode);
+}
+```
+
+拖动：`mousedown` 置标记 → `mousemove` 里 `applyW(e.clientX - mainEl.getBoundingClientRect().left - 14)` → `mouseup` 清标记。`resize` 时**用实测宽度重算**：
+
+```js
+window.addEventListener('resize', () => applyW(codePane.getBoundingClientRect().width));
+```
+
+> **别在 `resize` 里读 `--code-w`。** 它可能是百分比（`--code-w: 40%`），`parseFloat('40%')` 得到 `40`，于是面板被钳到 40px，整页塌掉。
+
+### 代码区：三列，注释永远不被裁
+
+行号 / 代码 / 注释各占一列。**代码永不折行，注释自己折行，注释起点全行统一。**
+
+```html
+<div class="cl" data-line="7">
+  <span class="ln">7</span>
+  <span class="cwrap">
+    <span class="cd">    ans[i] = a[i];</span>
+    <span class="cm">// 回填答案</span>
+  </span>
+</div>
+```
+
+```css
+.cl {
+  display: grid;
+  grid-template-columns: 22px var(--code-col-w) minmax(118px, 1fr);
+  column-gap: 10px; align-items: start;
+  font-family: var(--mono); font-size: 12px; line-height: 21px;
+}
+.cwrap { display: contents; }                                    /* 让 cd / cm 各自成一列 */
+.cl .cd { white-space: pre; }                                    /* 代码不折行 */
+.cl .cm { white-space: pre-wrap; overflow-wrap: break-word; }    /* 注释自己折行 */
+
+/* 降级：代码列太长、注释列被挤到没地方时，注释退回行尾 */
+.cl.flow { grid-template-columns: 22px minmax(0, 1fr); }
+.cl.flow .cwrap { display: block; min-width: 0; }
+.cl.flow .cd { white-space: pre-wrap; overflow-wrap: break-word; }
+.cl.flow .cm { display: inline; margin-left: 1ch; }
+```
+
+`display: contents` 是这套写法的关键：一个 `.cwrap` 同时支持两种模式——对齐模式下它"消失"，`cd` / `cm` 变成 grid 的两个 item；降级模式下它变回块，两个 span 在行内合并。
+
+构建时拆注释、量列宽：
+
+```js
+const cut = line.indexOf('//');
+const codeText = (cut >= 0 ? line.slice(0, cut) : line).replace(/\s+$/, '');
+const cmtText  = cut >= 0 ? line.slice(cut) : '';
+```
+
+```js
+// 必须用 scrollWidth：getBoundingClientRect 量到的是被列宽压扁后的宽度
+function alignCommentColumn(box) {
+  let maxW = 0;
+  box.querySelectorAll('.cl .cd').forEach(el => {
+    if (el.scrollWidth > maxW) maxW = el.scrollWidth;
+  });
+  if (maxW > 0) document.documentElement.style.setProperty('--code-col-w', Math.ceil(maxW + 2) + 'px');
+}
+
+// 注释列不足 180px 就降级成行内跟随，别让它挤成三行高的碎条
+function updateCodeMode() {
+  const box = document.getElementById('codeScroll');
+  const avail = box.clientWidth - 22 - 20 - 18;
+  const colW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--code-col-w')) || 236;
+  const flow = avail > 0 && colW + 180 > avail;
+  box.querySelectorAll('.cl').forEach(el => el.classList.toggle('flow', flow));
+}
+```
+
+两个函数都要在**拖动后、resize 后**重跑（`applyW` 里已用 rAF 挂上）。
+
+### Shift + 滚轮横向滚动
+
+```js
+codeScrollEl.addEventListener('wheel', (e) => {
+  if (!e.shiftKey) return;
+  if (codeScrollEl.scrollWidth <= codeScrollEl.clientWidth + 1) return;  // 没溢出就让它正常竖滚
+  e.preventDefault();
+  codeScrollEl.scrollLeft += (e.deltaY || e.deltaX);
+}, { passive: false });
+```
+
+必须 `passive: false`，否则 `preventDefault()` 无效，页面会跟着滚。
+
+### 变量区：竖排单列，紧凑胶囊
+
+```css
+.vars { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.v {
+  background: #faf9f6; border: 1px solid var(--line); border-radius: 8px;
+  padding: 4px 12px 4px 9px;
+  display: inline-grid; grid-template-columns: 40px auto; column-gap: 8px;
+  align-items: baseline; min-width: 132px;
+}
+```
+
+**禁用 `justify-content: space-between`**：名字贴左、值贴右，三个变量还并排横跨整个面板，眼睛要在面板上左右横跳才能把"谁等于几"连起来。名字和值**紧挨着 8px**，一行一个，从上往下扫。
+
+行数固定、`null` 显示成 `—` 占位，**不要删行**——行数一变，下面的内容会整体跳动。
+
+**变量表只放 B 级变量**（下标、计数器、长度、判定值）。A 级的累积容器（`res` / `row` / `path` / 队列）一律单独开区块，塞进小格子表等于没画。
+
+### 交付前按 1440×900 看这三处
+
+1. 每一行的**注释是否完整**（右侧没被切、也没压住代码）
+2. 中缝往左拖到底，**注释列还在不在**
+3. 变量区是不是**竖着一个一行**、名字和值挨着
+
+
+## 八、临时容器：`row` / `path` / 当前层
+
+这类变量**每轮清空重建**，是"一层""一条路径"这些概念的实体，必须在主图旁边占一块固定位置，不能塞变量表。五条要点：
+
+1. **位置固定**，不要让它跟着主图飘。它的职责是"接住这一轮的值"，位置一动读者就跟丢。
+2. **空态也要画**：`[ ]` 加一句"空篮子"。留白会让人以为这块不存在。
+3. **逐项追加要可见**：`row.push_back(x)` 那一步，把刚加进去的那格用琥珀描一下，其余保持绿。"值是一个一个攒起来的"才看得见。
+4. **封箱瞬间要有动作**：`res.push_back(row)` 时整块 `row` 高亮 → 落进 `res` 新的一行 → `row` 清空。这是"为什么结果是二维数组"的唯一解释窗口，不能省。
+5. **和 `res` 并排放**：`row` 在上、`res` 在下，中间加一根细箭头或一个"↓ 封箱"。两个框的关系一眼可见。
+
+**反例（真实踩过）**：层序遍历那页只画了 `res`，变量表塞了 `n / i / q.size() / cur`，`row` 全程没出现。读者看到 `res.push_back(row)` 时，既不知道 `row` 里装了什么，也看不出它什么时候清空过——思维链断在这一行，后面所有层都成了黑箱。
