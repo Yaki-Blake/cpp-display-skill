@@ -47,6 +47,7 @@
     height: 100vh;
     overflow: hidden;
     font-size: 13px;
+    font-variant-numeric: tabular-nums;   /* 数字等宽：数值一变宽度不抖，整列不会左右跳 */
   }
   .app { display: flex; flex-direction: column; height: 100vh; }
 
@@ -131,8 +132,11 @@
   .cl.active .cd { color: #6b4a10; }
   .cl.active .cm { color: #a8863f; }
 
-  /* 右：数据 */
-  .data-scroll { overflow-y: auto; padding: 12px 14px 20px; flex: 1; }
+  /* 右：数据
+     overflow-y:auto 只是兜底：右栏一旦真的出现滚动条，一屏就装不下了，
+     读者得一边看主图一边往下滚才读得到总数。交付前跑 --fit 量一遍，
+     超了先压 padding / gap，再并排，最后才砍 C 级，A1/A2 不许砍。 */
+  .data-scroll { overflow-y: auto; padding: 12px 14px 20px; flex: 1; min-height: 0; }
 
   .note {
     background: var(--amber-bg); border: 1px solid #f0dcbc; border-radius: 9px;

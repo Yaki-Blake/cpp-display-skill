@@ -47,13 +47,15 @@ node -v      # 期望 v18.0.0 及以上
 
 模板按题型挑，画法查 `references/`。
 
+递归题有**五种画法**：调用栈帧 / 递归树 / 决策树 / 记忆化砍子树 / **代码切块**（把每次调用摊成一块，进入接右下方、返回接左下方，连成蛇形回路）。按"难点是结构还是执行流"来挑，判别式见 `references/block-tiling.md`。
+
 ## 目录
 
 | 位置 | 内容 |
 |---|---|
 | `SKILL.md` | 主文档，先读这个 |
 | `references/` | 画法、渲染细节、常见坑 |
-| `templates/` | 三个可运行模板，复制改名就能用 |
+| `templates/` | 四个可运行模板，复制改名就能用 |
 | `scripts/` | 校验脚本（**需要 Node.js**） |
 
 ---
@@ -107,11 +109,13 @@ Just describe what you want, for example "turn this problem into a demo page" or
 
 Pick a template by problem type, and look up drawing conventions in `references/`.
 
+Recursion has **five presentation forms**: call stack frames / recursion tree / decision tree / memoised pruning / **code tiling** (each call becomes one block; descent attaches bottom-right, return cards attach bottom-left, forming a snake-shaped loop). Choose by whether the hard part is the *structure* or the *execution flow* — see `references/block-tiling.md`.
+
 ### Layout
 
 | Path | Contents |
 |---|---|
 | `SKILL.md` | Main document — read this first |
 | `references/` | Drawing conventions, rendering details, common pitfalls |
-| `templates/` | Three runnable templates — copy, rename, use |
+| `templates/` | Four runnable templates — copy, rename, use |
 | `scripts/` | Check scripts (**Node.js required**) |

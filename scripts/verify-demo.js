@@ -4,6 +4,7 @@
  *
  * 用法:
  *   node verify-demo.js <demo.html>
+ *   node verify-demo.js <demo.html> --fit                # 一屏适配（1440×900）
  *   node verify-demo.js <demo.html> --shot 0 --shot 8 --shot last
  *   node verify-demo.js <demo.html> --shot=12 --width 1500 --height 900
  *
@@ -16,6 +17,7 @@
  *   6. 是否有完全重复的相邻步
  *   7. 有 brute() 就自动跟最后一步的 ans / result 对拍
  *   8. 可选截图
+ *   9. --fit 一屏适配：整页不许出屏、右侧数据栏不许出现滚动条
  *
  * 退出码: 0 通过 / 1 有错 / 2 用法错误
  */
@@ -28,22 +30,23 @@ const { execFileSync } = require('child_process');
 const argv = process.argv.slice(2);
 const file = argv.find(a => !a.startsWith('--'));
 if (!file) {
-  console.error('用法: node verify-demo.js <demo.html> [--shot 0|last|N] [--width W] [--height H]');
+  console.error('用法: node verify-demo.js <demo.html> [--fit] [--shot 0|last|N] [--width W] [--height H]');
   process.exit(2);
 }
 
 const shots = [];
-let W = 1560, H = 1000;
+let W = 1560, H = 1000, Wset = false, Hset = false;
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   let m;
   if (a === '--shot' && argv[i + 1]) shots.push(argv[i + 1]);
   else if ((m = a.match(/^--shot=(.+)$/))) shots.push(m[1]);
-  else if (a === '--width' && argv[i + 1]) W = Number(argv[i + 1]);
-  else if ((m = a.match(/^--width=(\d+)$/))) W = Number(m[1]);
-  else if (a === '--height' && argv[i + 1]) H = Number(argv[i + 1]);
-  else if ((m = a.match(/^--height=(\d+)$/))) H = Number(m[1]);
+  else if (a === '--width' && argv[i + 1]) { W = Number(argv[i + 1]); Wset = true; }
+  else if ((m = a.match(/^--width=(\d+)$/))) { W = Number(m[1]); Wset = true; }
+  else if (a === '--height' && argv[i + 1]) { H = Number(argv[i + 1]); Hset = true; }
+  else if ((m = a.match(/^--height=(\d+)$/))) { H = Number(m[1]); Hset = true; }
 }
+const fit = argv.includes('--fit');
 
 const abs = path.resolve(file);
 if (!fs.existsSync(abs)) {
@@ -180,8 +183,7 @@ function findChrome() {
   return null;
 }
 
-if (shots.length) {
-  const chrome = findChrome();
+if (shots.length) {  const chrome = findChrome();
   if (!chrome) {
     nte('没找到 Chrome / Edge，跳过截图');
   } else if (!steps) {
@@ -218,6 +220,112 @@ if (shots.length) {
   }
 } else if (steps) {
   console.log('  \x1b[2m提示：加 --shot 0 --shot last 可以截图检查布局\x1b[0m');
+}
+
+// ---------- 9. 一屏适配（--fit） ----------
+// 规矩：整页不许出屏，右侧数据栏不许出现滚动条。
+// 做法：把探针脚本注进一份临时副本，让它在页面里量真实高度，写进 <title>，再 dump 出来。
+if (fit) {
+  const chrome = findChrome();
+  const fitW = Wset ? W : 1440;
+  const fitH = Hset ? H : 900;
+
+  if (!chrome) {
+    nte('没找到 Chrome / Edge，跳过一屏适配检查');
+  } else if (!steps || !steps.length) {
+    nte('steps 没生成，跳过一屏适配检查');
+  } else {
+    const probeFile = path.join(dir, '_fit_probe.html');
+    const probe = '<script>window.addEventListener("load",function(){setTimeout(function(){'
+      + 'var d=document.documentElement,t="FIT";'
+      + 'function r(v){return Math.round(v)}'
+      + 't+="|iw="+r(innerWidth)+"|ih="+r(innerHeight)+"|ph="+r(d.scrollHeight)+"|pw="+r(d.scrollWidth);'
+      + 'var p=document.querySelector(".data-scroll")||document.querySelector("#canvas");'
+      + 'if(p){'
+      +   't+="|paneSh="+r(p.scrollHeight)+"|paneCh="+r(p.clientHeight)'
+      +       '+"|paneSw="+r(p.scrollWidth)+"|paneCw="+r(p.clientWidth);'
+      +   'var ls=[],arr=[];'
+      +   '[].slice.call(p.children).forEach(function(e){'
+      +     'var rc=e.getBoundingClientRect();'
+      +     'if(rc.width<2)return;'
+      +     'if(getComputedStyle(e).position==="absolute")return;'
+      +     'var L=Math.round(rc.left);'
+      +     'if(ls.indexOf(L)<0){ls.push(L);arr.push(L)}'
+      +   '});'
+      // 右栏各块左边缘必须共线，留 3px 容差（边框/阴影会差 1px）
+      +   'if(arr.length>1&&Math.max.apply(null,arr)-Math.min.apply(null,arr)>3)'
+      +     't+="|pleft="+arr.join(",");'
+      + '}'
+      + 'var c=document.querySelector(".code-scroll")||document.querySelector("#codeBody");'
+      + 'if(c)t+="|codeSh="+r(c.scrollHeight)+"|codeCh="+r(c.clientHeight);'
+      + 'document.title=t;},250)});<\/script>';
+
+    fs.writeFileSync(probeFile, html.replace('</body>', probe + '</body>'));
+
+    const marks = [...new Set([0, Math.floor((steps.length - 1) / 2), steps.length - 1])];
+    const probeUrl = 'file:///' + probeFile.replace(/\\/g, '/');
+    let fitBad = 0;
+    const fitFail = m => { fitBad++; bad(m); };
+    const lefts = [];
+
+    for (const n of marks) {
+      let dump = '';
+      try {
+        dump = execFileSync(chrome, [
+          '--headless=new', '--disable-gpu',
+          `--window-size=${fitW},${fitH}`,
+          '--virtual-time-budget=3000',
+          '--dump-dom',
+          `${probeUrl}#step=${n}`
+        ], { encoding: 'utf8', timeout: 45000, maxBuffer: 64 * 1024 * 1024 });
+      } catch (e) {
+        bad(`第 ${n} 步一屏检查失败: ${e.message.split('\n')[0]}`);
+        continue;
+      }
+
+      const hit = dump.match(/FIT\|[^<]*/);
+      if (!hit) { bad(`第 ${n} 步量不到尺寸 —— 页面可能初始化失败`); continue; }
+
+      const q = {}, raw = {};
+      for (const kv of hit[0].split('|').slice(1)) {
+        const [k, v] = kv.split('=');
+        if (k) { q[k] = Number(v); raw[k] = v; }
+      }
+
+      if (raw.pleft) {
+        for (const v of raw.pleft.split(',')) {
+          const L = Number(v);
+          if (Number.isFinite(L) && !lefts.includes(L)) lefts.push(L);
+        }
+      }
+
+      // ① 整页出屏：最严重，直接判错
+      if (q.ph > q.ih + 2) fitFail(`第 ${n} 步 整页高 ${q.ph} > 视口 ${q.ih}（多出 ${q.ph - q.ih}px），页面本身要滚`);
+      if (q.pw > q.iw + 2) fitFail(`第 ${n} 步 整页宽 ${q.pw} > 视口 ${q.iw}（多出 ${q.pw - q.iw}px），出现横向滚动条`);
+
+      // ② 右栏滚动：这才是「数据跑到屏幕外」的真凶
+      if (q.paneSh && q.paneSh > q.paneCh + 2) {
+        fitFail(`第 ${n} 步 右侧数据栏 ${q.paneSh} > ${q.paneCh}（超出 ${q.paneSh - q.paneCh}px），读者必须滚右栏才看得全`);
+      }
+      if (q.paneSw && q.paneSw > q.paneCw + 2) {
+        nte(`第 ${n} 步 右侧数据栏横向超出 ${q.paneSw - q.paneCw}px，有内容挤到右边看不见`);
+      }
+
+      // ③ 代码区滚动：可接受（高亮会跟着走），但一屏装得下更好
+      if (q.codeSh && q.codeSh > q.codeCh + 2) {
+        nte(`第 ${n} 步 代码区要滚 ${q.codeSh - q.codeCh}px（不算错，能压进一屏更省事）`);
+      }
+    }
+
+    // ④ 文字左边缘共线（只提醒，不判错：有些设计故意缩进）
+    if (lefts.length > 1) {
+      nte(`右栏各块左边缘不齐：${lefts.join(' / ')}px —— 统一父级 padding，别让某一块单独缩进`);
+    }
+
+    try { fs.unlinkSync(probeFile); } catch (e) { /* 清理失败不影响结论 */ }
+
+    if (!fitBad) ok(`一屏适配通过（${fitW}×${fitH}，抽查 ${marks.length} 帧）`);
+  }
 }
 
 // ---------- 汇总 ----------
